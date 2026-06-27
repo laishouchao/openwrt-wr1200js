@@ -61,9 +61,12 @@ jobs:
       - name: Add third-party feeds
         run: |
           cd openwrt-ib
-          # 添加第三方软件源 (kiddin9 packages)
-          echo 'src/gz openwrt_kiddin9 https://raw.githubusercontent.com/kiddin9/openwrt-packages-23.05/master' >> feeds.conf.default
-          echo "=== feeds.conf.default ==="
+          echo "=== Original feeds.conf.default ==="
+          cat feeds.conf.default || echo "(empty or not found)"
+          echo ""
+          # 添加第三方软件源 (kiddin9 packages for luci-theme-argon)
+          echo 'src-git kiddin9 https://github.com/kiddin9/openwrt-packages-23.05;main' >> feeds.conf.default
+          echo "=== Updated feeds.conf.default ==="
           cat feeds.conf.default
           echo ""
           echo "=== Updating feeds ==="
