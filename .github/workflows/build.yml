@@ -58,6 +58,21 @@ jobs:
           echo "ImageBuilder ready: openwrt-ib"
           ls openwrt-ib/
 
+      - name: Add third-party feeds
+        run: |
+          cd openwrt-ib
+          # 添加第三方软件源 (kiddin9 packages)
+          echo 'src/gz openwrt_kiddin9 https://raw.githubusercontent.com/kiddin9/openwrt-packages-23.05/master' >> feeds.conf.default
+          echo "=== feeds.conf.default ==="
+          cat feeds.conf.default
+          echo ""
+          echo "=== Updating feeds ==="
+          ./scripts/feeds update -a
+          echo ""
+          echo "=== Installing feeds ==="
+          ./scripts/feeds install -a
+          echo "Feeds ready!"
+
       - name: Build firmware
         run: |
           cd openwrt-ib
@@ -66,6 +81,7 @@ jobs:
           PACKAGES="\
             luci luci-i18n-base-zh-cn luci-compat luci-lib-ipkg \
             -wpad-basic-mbedtls wpad-openssl \
+            luci-theme-argon \
             luci-proto-ppp ppp-mod-pppoe \
             block-mount kmod-usb-storage kmod-usb-storage-extras \
             kmod-fs-ext4 kmod-fs-vfat kmod-fs-exfat \
