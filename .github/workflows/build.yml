@@ -158,14 +158,12 @@ jobs:
           echo "uci delete wireless.radio0.multi_ap 2>/dev/null" >> $UCI
           echo "uci delete wireless.radio1.multi_ap 2>/dev/null" >> $UCI
           echo "uci set wireless.default_radio0.mode='ap'" >> $UCI
-          echo "uci set wireless.default_radio0.ssid='WR1200JS'" >> $UCI
-          echo "uci set wireless.default_radio0.encryption='psk2'" >> $UCI
-          echo "uci set wireless.default_radio0.key='19981213'" >> $UCI
+          echo "uci set wireless.default_radio0.ssid='OPENWRT'" >> $UCI
+          echo "uci set wireless.default_radio0.encryption='none'" >> $UCI
           echo "uci set wireless.default_radio0.network='lan'" >> $UCI
           echo "uci set wireless.default_radio1.mode='ap'" >> $UCI
-          echo "uci set wireless.default_radio1.ssid='WR1200JS-5G'" >> $UCI
-          echo "uci set wireless.default_radio1.encryption='psk2'" >> $UCI
-          echo "uci set wireless.default_radio1.key='19981213'" >> $UCI
+          echo "uci set wireless.default_radio1.ssid='OPENWRT-5G'" >> $UCI
+          echo "uci set wireless.default_radio1.encryption='none'" >> $UCI
           echo "uci set wireless.default_radio1.network='lan'" >> $UCI
           echo '' >> $UCI
 
