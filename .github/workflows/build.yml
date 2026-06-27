@@ -61,20 +61,34 @@ jobs:
       - name: Add third-party feeds
         run: |
           cd openwrt-ib
-          echo "=== Checking existing feeds ==="
-          ls -la feeds.conf* 2>/dev/null || echo "No feeds.conf files found"
-          cat feeds.conf.default 2>/dev/null || echo "feeds.conf.default not found"
+          echo "=== Downloading argon theme packages ==="
+          # 创建自定义包目录并下载 .ipk
+          mkdir -p custom_packages/base
+          curl -L -o custom_packages/base/luci-theme-argon.ipk \
+            "https://dl.openwrt.ai/releases/25.12/packages/mipsel_24kc/kiddin9/luci-theme-argon_2.4.3-r3_all.ipk"
+          echo "Downloaded:"
+          ls -la custom_packages/base/
           echo ""
-          # 创建 feeds.conf.default (ImageBuilder 默认没有这个文件)
-          # 先写入标准 OpenWrt feeds
-          echo 'src/gz openwrt_core https://downloads.openwrt.org/releases/24.10.7/targets/ramips/mt7621/packages' > feeds.conf.default
-          echo 'src/gz openwrt_base https://downloads.openwrt.org/releases/24.10.7/packages/mipsel_24kc/base' >> feeds.conf.default
-          echo 'src/gz openwrt_luci https://downloads.openwrt.org/releases/24.10.7/packages/mipsel_24kc/luci' >> feeds.conf.default
-          echo 'src/gz openwrt_packages https://downloads.openwrt.org/releases/24.10.7/packages/mipsel_24kc/packages' >> feeds.conf.default
-          echo 'src/gz openwrt_routing https://downloads.openwrt.org/releases/24.10.7/packages/mipsel_24kc/routing' >> feeds.conf.default
-          echo 'src/gz openwrt_telephony https://downloads.openwrt.org/releases/24.10.7/packages/mipsel_24kc/telephony' >> feeds.conf.default
-          # 添加第三方软件源 (kiddin9 packages for luci-theme-argon)
-          echo 'src/gz openwrt_kiddin9 https://dl.openwrt.ai/latest/packages/mipsel_24kc/kiddin9' >> feeds.conf.default
+          # 提取 .ipk 中的 control 信息生成 Packages 索引
+          cd custom_packages/base
+          for ipk in *.ipk; do
+            tmpdir=$(mktemp -d)
+            tar -xzf "$ipk" -C "$tmpdir" ./control.tar.gz 2>/dev/null
+            tar -xzf "$tmpdir/control.tar.gz" -C "$tmpdir" ./control 2>/dev/null
+            if [ -f "$tmpdir/control" ]; then
+              cat "$tmpdir/control" >> Packages
+              echo "" >> Packages
+              rm -rf "$tmpdir"
+            else
+              rm -rf "$tmpdir"
+            fi
+          done
+          echo "=== Packages index ==="
+          cat Packages
+          cd ../..
+          echo ""
+          # 添加本地 feed
+          echo "src/link local_packages $(pwd)/custom_packages" >> feeds.conf.default
           echo "=== feeds.conf.default ==="
           cat feeds.conf.default
           echo ""
