@@ -22,7 +22,6 @@ jobs:
   build:
     runs-on: ubuntu-22.04
     timeout-minutes: 120
-    cancel-timeout: 120
 
     steps:
       - name: Checkout
