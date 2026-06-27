@@ -31,7 +31,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential libncurses5-dev libncursesw5-dev \
-            zlib1g-dev gawk git gettext libssl-dev xsltproc wget unzip python3
+            zlib1g-dev gawk git gettext libssl-dev xsltproc wget unzip python3 zstd
 
       - name: Set version
         id: version
@@ -45,13 +45,14 @@ jobs:
       - name: Download ImageBuilder
         run: |
           VERSION=${{ steps.version.outputs.version }}
-          IB_URL="https://downloads.openwrt.org/releases/${VERSION}/targets/${TARGET}/${SUBTARGET}/openwrt-imagebuilder-${VERSION}-${TARGET}-${SUBTARGET}-Linux-x86_64.tar.xz"
+          IB_URL="https://downloads.openwrt.org/releases/${VERSION}/targets/${TARGET}/${SUBTARGET}/openwrt-imagebuilder-${VERSION}-${TARGET}-${SUBTARGET}.Linux-x86_64.tar.zst"
           echo "Downloading ImageBuilder: $IB_URL"
-          curl -L --retry 3 --retry-delay 10 -o imagebuilder.tar.xz "$IB_URL"
-          echo "Download complete, extracting..."
+          curl -L --retry 5 --retry-delay 15 --connect-timeout 30 -o imagebuilder.tar.zst "$IB_URL"
+          echo "Download complete ($(du -h imagebuilder.tar.zst | cut -f1)), extracting..."
           mkdir -p openwrt-ib
-          tar xf imagebuilder.tar.xz --strip-components=1 -C openwrt-ib
-          rm imagebuilder.tar.xz
+          zstd -d imagebuilder.tar.zst -o imagebuilder.tar
+          tar xf imagebuilder.tar --strip-components=1 -C openwrt-ib
+          rm -f imagebuilder.tar.zst imagebuilder.tar
           echo "ImageBuilder ready: openwrt-ib"
           ls openwrt-ib/
 
