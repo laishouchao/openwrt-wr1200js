@@ -63,7 +63,7 @@ jobs:
           # 软件包列表
           PACKAGES="\
             luci luci-i18n-base-zh-cn luci-compat luci-lib-ipkg \
-            wpad-openssl \
+            -wpad-basic-mbedtls wpad-openssl \
             luci-proto-ppp ppp-mod-pppoe \
             block-mount kmod-usb-storage kmod-usb-storage-extras \
             kmod-fs-ext4 kmod-fs-vfat kmod-fs-exfat \
