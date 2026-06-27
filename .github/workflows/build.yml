@@ -61,42 +61,20 @@ jobs:
       - name: Add third-party feeds
         run: |
           cd openwrt-ib
-          echo "=== Downloading argon theme packages ==="
-          # 创建自定义包目录并下载 .ipk
-          mkdir -p custom_packages/base
-          curl -L -o custom_packages/base/luci-theme-argon.ipk \
-            "https://dl.openwrt.ai/releases/25.12/packages/mipsel_24kc/kiddin9/luci-theme-argon_2.4.3-r3_all.ipk"
-          echo "Downloaded:"
-          ls -la custom_packages/base/
-          echo ""
-          # 提取 .ipk 中的 control 信息生成 Packages 索引
-          cd custom_packages/base
-          for ipk in *.ipk; do
-            tmpdir=$(mktemp -d)
-            tar -xzf "$ipk" -C "$tmpdir" ./control.tar.gz 2>/dev/null
-            tar -xzf "$tmpdir/control.tar.gz" -C "$tmpdir" ./control 2>/dev/null
-            if [ -f "$tmpdir/control" ]; then
-              cat "$tmpdir/control" >> Packages
-              echo "" >> Packages
-              rm -rf "$tmpdir"
-            else
-              rm -rf "$tmpdir"
-            fi
-          done
-          echo "=== Packages index ==="
-          cat Packages
-          cd ../..
-          echo ""
-          # 添加本地 feed
-          echo "src/link local_packages $(pwd)/custom_packages" >> feeds.conf.default
+          # 配置 git 允许匿名克隆公开仓库
+          export GIT_TERMINAL_PROMPT=0
+          export GIT_ASKPASS=echo
+          # 添加第三方软件源 (kiddin9 packages for luci-theme-argon)
+          echo 'src-git kiddin9 https://github.com/kiddin9/openwrt-packages-23.05' >> feeds.conf.default
           echo "=== feeds.conf.default ==="
           cat feeds.conf.default
           echo ""
           echo "=== Updating feeds ==="
-          ./scripts/feeds update -a
+          # 先只更新 kiddin9 feed，跳过官方 feeds（ImageBuilder 已内置）
+          ./scripts/feeds update kiddin9 || echo "kiddin9 feed update had issues, continuing..."
           echo ""
           echo "=== Installing feeds ==="
-          ./scripts/feeds install -a
+          ./scripts/feeds install -a || echo "feeds install had warnings, continuing..."
           echo "Feeds ready!"
 
       - name: Build firmware
