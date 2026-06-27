@@ -61,12 +61,21 @@ jobs:
       - name: Add third-party feeds
         run: |
           cd openwrt-ib
-          echo "=== Original feeds.conf.default ==="
-          cat feeds.conf.default || echo "(empty or not found)"
+          echo "=== Checking existing feeds ==="
+          ls -la feeds.conf* 2>/dev/null || echo "No feeds.conf files found"
+          cat feeds.conf.default 2>/dev/null || echo "feeds.conf.default not found"
           echo ""
+          # 创建 feeds.conf.default (ImageBuilder 默认没有这个文件)
+          # 先写入标准 OpenWrt feeds
+          echo 'src/gz openwrt_core https://downloads.openwrt.org/releases/24.10.7/targets/ramips/mt7621/packages' > feeds.conf.default
+          echo 'src/gz openwrt_base https://downloads.openwrt.org/releases/24.10.7/packages/mipsel_24kc/base' >> feeds.conf.default
+          echo 'src/gz openwrt_luci https://downloads.openwrt.org/releases/24.10.7/packages/mipsel_24kc/luci' >> feeds.conf.default
+          echo 'src/gz openwrt_packages https://downloads.openwrt.org/releases/24.10.7/packages/mipsel_24kc/packages' >> feeds.conf.default
+          echo 'src/gz openwrt_routing https://downloads.openwrt.org/releases/24.10.7/packages/mipsel_24kc/routing' >> feeds.conf.default
+          echo 'src/gz openwrt_telephony https://downloads.openwrt.org/releases/24.10.7/packages/mipsel_24kc/telephony' >> feeds.conf.default
           # 添加第三方软件源 (kiddin9 packages for luci-theme-argon)
-          echo 'src-git kiddin9 https://github.com/kiddin9/openwrt-packages-23.05;main' >> feeds.conf.default
-          echo "=== Updated feeds.conf.default ==="
+          echo 'src/gz openwrt_kiddin9 https://dl.openwrt.ai/latest/packages/mipsel_24kc/kiddin9' >> feeds.conf.default
+          echo "=== feeds.conf.default ==="
           cat feeds.conf.default
           echo ""
           echo "=== Updating feeds ==="
