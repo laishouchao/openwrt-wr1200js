@@ -103,15 +103,13 @@ jobs:
           # === 添加 UCI defaults: WiFi 默认开启 ===
           echo "=== 配置 WiFi 默认开启 ==="
           mkdir -p /tmp/argon-files/etc/uci-defaults
-          cat > /tmp/argon-files/etc/uci-defaults/99-wifi-enable <<'UCIDEF'
-#!/bin/sh
-# 默认开启 2.4G 和 5G WiFi
-uci set wireless.radio0.disabled='0'
-uci set wireless.radio1.disabled='0'
-uci commit wireless
-UCIDEF
+          echo '#!/bin/sh' > /tmp/argon-files/etc/uci-defaults/99-wifi-enable
+          echo "uci set wireless.radio0.disabled='0'" >> /tmp/argon-files/etc/uci-defaults/99-wifi-enable
+          echo "uci set wireless.radio1.disabled='0'" >> /tmp/argon-files/etc/uci-defaults/99-wifi-enable
+          echo "uci commit wireless" >> /tmp/argon-files/etc/uci-defaults/99-wifi-enable
           chmod +x /tmp/argon-files/etc/uci-defaults/99-wifi-enable
           echo "WiFi defaults script created"
+          cat /tmp/argon-files/etc/uci-defaults/99-wifi-enable
 
           echo "FILES directory ready:"
           find . -type d | sort
