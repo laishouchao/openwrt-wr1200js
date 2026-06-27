@@ -136,16 +136,64 @@ jobs:
           echo "..."
           rm -f debian-binary control.tar.gz control.tar.xz data.tar.gz data.tar.xz
 
-          # === 添加 UCI defaults: WiFi 默认开启 ===
-          echo "=== 配置 WiFi 默认开启 ==="
+          # === UCI defaults: 首次开机自动配置 ===
+          echo "=== 创建 UCI defaults 快速配置 ==="
           mkdir -p /tmp/argon-files/etc/uci-defaults
-          echo '#!/bin/sh' > /tmp/argon-files/etc/uci-defaults/99-wifi-enable
-          echo "uci set wireless.radio0.disabled='0'" >> /tmp/argon-files/etc/uci-defaults/99-wifi-enable
-          echo "uci set wireless.radio1.disabled='0'" >> /tmp/argon-files/etc/uci-defaults/99-wifi-enable
-          echo "uci commit wireless" >> /tmp/argon-files/etc/uci-defaults/99-wifi-enable
-          chmod +x /tmp/argon-files/etc/uci-defaults/99-wifi-enable
-          echo "WiFi defaults script created"
-          cat /tmp/argon-files/etc/uci-defaults/99-wifi-enable
+          UCI=/tmp/argon-files/etc/uci-defaults/90-wr1200js-setup
+
+          echo '#!/bin/sh' > $UCI
+          echo '# WR1200JS 首次开机快速配置' >> $UCI
+          echo '' >> $UCI
+
+          # 1. LAN IP
+          echo "uci set network.lan.ipaddr='192.168.2.1'" >> $UCI
+          echo "uci set network.lan.netmask='255.255.255.0'" >> $UCI
+          echo "uci set network.lan.dns='8.8.8.8'" >> $UCI
+          echo "uci set network.lan.dns='8.8.4.4'" >> $UCI
+          echo '' >> $UCI
+
+          # 2. WiFi 双频分开
+          echo "uci set wireless.radio0.disabled='0'" >> $UCI
+          echo "uci set wireless.radio1.disabled='0'" >> $UCI
+          echo "uci delete wireless.radio0.multi_ap 2>/dev/null" >> $UCI
+          echo "uci delete wireless.radio1.multi_ap 2>/dev/null" >> $UCI
+          echo "uci set wireless.default_radio0.mode='ap'" >> $UCI
+          echo "uci set wireless.default_radio0.ssid='WR1200JS'" >> $UCI
+          echo "uci set wireless.default_radio0.encryption='psk2'" >> $UCI
+          echo "uci set wireless.default_radio0.key='19981213'" >> $UCI
+          echo "uci set wireless.default_radio0.network='lan'" >> $UCI
+          echo "uci set wireless.default_radio1.mode='ap'" >> $UCI
+          echo "uci set wireless.default_radio1.ssid='WR1200JS-5G'" >> $UCI
+          echo "uci set wireless.default_radio1.encryption='psk2'" >> $UCI
+          echo "uci set wireless.default_radio1.key='19981213'" >> $UCI
+          echo "uci set wireless.default_radio1.network='lan'" >> $UCI
+          echo '' >> $UCI
+
+          # 3. 时区
+          echo "uci set system.@system[0].timezone='CST-8'" >> $UCI
+          echo "uci set system.@system[0].zonename='Asia/Shanghai'" >> $UCI
+          echo "uci set system.@system[0].hostname='WR1200JS'" >> $UCI
+          echo '' >> $UCI
+
+          # 4. DHCP
+          echo "uci delete dhcp.lan 2>/dev/null" >> $UCI
+          echo "uci set dhcp.lan=dhcp" >> $UCI
+          echo "uci set dhcp.lan.interface='lan'" >> $UCI
+          echo "uci set dhcp.lan.start='100'" >> $UCI
+          echo "uci set dhcp.lan.limit='150'" >> $UCI
+          echo "uci set dhcp.lan.leasetime='12h'" >> $UCI
+          echo '' >> $UCI
+
+          # 5. 提交
+          echo "uci commit network" >> $UCI
+          echo "uci commit wireless" >> $UCI
+          echo "uci commit system" >> $UCI
+          echo "uci commit dhcp" >> $UCI
+          echo "exit 0" >> $UCI
+
+          chmod +x $UCI
+          echo "✅ 快速配置脚本已创建"
+          cat $UCI
 
           echo "FILES directory ready:"
           find . -type d | sort
