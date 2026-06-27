@@ -62,19 +62,18 @@ jobs:
 
           # 软件包列表
           PACKAGES="\
-            luci luci-i18n-base-zh-cn luci-theme-argon luci-compat luci-lib-ipkg \
+            luci luci-i18n-base-zh-cn luci-compat luci-lib-ipkg \
             wpad-openssl \
             luci-proto-ppp ppp-mod-pppoe \
-            luci-proto-relayd relayd \
             block-mount kmod-usb-storage kmod-usb-storage-extras \
             kmod-fs-ext4 kmod-fs-vfat kmod-fs-exfat \
             kmod-nls-cp437 kmod-nls-cp936 kmod-nls-utf8 \
-            luci-app-samba samba4-server \
+            luci-app-samba4 samba4-server \
             luci-app-adblock adblock \
             luci-app-smartdns smartdns \
             luci-app-sqm sqm-scripts \
             luci-app-ddns ddns-scripts \
-            luci-app-upnp miniupnpd \
+            luci-app-upnp miniupnpd-nftables \
             luci-proto-wireguard wireguard-tools \
             luci-app-wol \
             luci-app-hd-idle \
