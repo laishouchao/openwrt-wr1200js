@@ -99,6 +99,20 @@ jobs:
           find . -type f | head -30
           echo "..."
           rm -f debian-binary control.tar.gz control.tar.xz data.tar.gz data.tar.xz
+
+          # === 添加 UCI defaults: WiFi 默认开启 ===
+          echo "=== 配置 WiFi 默认开启 ==="
+          mkdir -p /tmp/argon-files/etc/uci-defaults
+          cat > /tmp/argon-files/etc/uci-defaults/99-wifi-enable <<'UCIDEF'
+#!/bin/sh
+# 默认开启 2.4G 和 5G WiFi
+uci set wireless.radio0.disabled='0'
+uci set wireless.radio1.disabled='0'
+uci commit wireless
+UCIDEF
+          chmod +x /tmp/argon-files/etc/uci-defaults/99-wifi-enable
+          echo "WiFi defaults script created"
+
           echo "FILES directory ready:"
           find . -type d | sort
 
@@ -124,6 +138,7 @@ jobs:
             luci-app-wol \
             luci-app-hd-idle \
             nano htop curl wget \
+            e2fsprogs \
           "
 
           echo "Building firmware for ${PROFILE}..."
