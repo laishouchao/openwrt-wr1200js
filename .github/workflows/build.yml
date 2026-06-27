@@ -62,17 +62,53 @@ jobs:
       - name: Download Argon theme
         run: |
           echo "=== Downloading luci-theme-argon .ipk ==="
-          # 直接下载已知可用的 URL
-          curl -L --retry 3 --retry-delay 5 --connect-timeout 30 \
-            -o /tmp/luci-theme-argon.ipk \
-            "https://dl.openwrt.ai/releases/25.12/packages/mipsel_24kc/kiddin9/luci-theme-argon_2.4.3-r3_all.ipk" \
-            || { echo "Primary URL failed, trying latest..."; \
-            curl -L --retry 3 --retry-delay 5 --connect-timeout 30 \
-              -o /tmp/luci-theme-argon.ipk \
-              "https://dl.openwrt.ai/latest/packages/mipsel_24kc/kiddin9/luci-theme-argon_2.4.3-r3_all.ipk"; }
 
-          if [ ! -s /tmp/luci-theme-argon.ipk ]; then
-            echo "ERROR: Failed to download luci-theme-argon"
+          # 尝试多个来源下载
+          DOWNLOAD_OK=0
+
+          # 来源 1: dl.openwrt.ai
+          for VER in "25.12" "24.10" "23.05"; do
+            URL="https://dl.openwrt.ai/releases/${VER}/packages/mipsel_24kc/kiddin9/luci-theme-argon_2.4.3-r3_all.ipk"
+            echo "Trying: $URL"
+            curl -L --retry 3 --retry-delay 5 --connect-timeout 30 \
+              -o /tmp/luci-theme-argon.ipk "$URL" 2>/dev/null
+            SIZE=$(stat -c%s /tmp/luci-theme-argon.ipk 2>/dev/null || echo 0)
+            if [ "$SIZE" -gt 1000 ]; then
+              echo "✅ Downloaded from dl.openwrt.ai (${VER})"
+              DOWNLOAD_OK=1
+              break
+            fi
+            echo "   Failed (${SIZE} bytes), trying next..."
+          done
+
+          # 来源 2: GitHub Pages
+          if [ "$DOWNLOAD_OK" = "0" ]; then
+            URL="https://jerrykuku.github.io/luci-theme-argon/luci-theme-argon_2.4.3-r3_all.ipk"
+            echo "Trying: $URL"
+            curl -L --retry 3 --retry-delay 5 --connect-timeout 30 \
+              -o /tmp/luci-theme-argon.ipk "$URL" 2>/dev/null
+            SIZE=$(stat -c%s /tmp/luci-theme-argon.ipk 2>/dev/null || echo 0)
+            if [ "$SIZE" -gt 1000 ]; then
+              echo "✅ Downloaded from GitHub Pages"
+              DOWNLOAD_OK=1
+            fi
+          fi
+
+          # 来源 3: dl.openwrt.ai latest
+          if [ "$DOWNLOAD_OK" = "0" ]; then
+            URL="https://dl.openwrt.ai/latest/packages/mipsel_24kc/kiddin9/luci-theme-argon_2.4.3-r3_all.ipk"
+            echo "Trying: $URL"
+            curl -L --retry 3 --retry-delay 5 --connect-timeout 30 \
+              -o /tmp/luci-theme-argon.ipk "$URL" 2>/dev/null
+            SIZE=$(stat -c%s /tmp/luci-theme-argon.ipk 2>/dev/null || echo 0)
+            if [ "$SIZE" -gt 1000 ]; then
+              echo "✅ Downloaded from dl.openwrt.ai (latest)"
+              DOWNLOAD_OK=1
+            fi
+          fi
+
+          if [ "$DOWNLOAD_OK" = "0" ]; then
+            echo "ERROR: Failed to download luci-theme-argon from all sources"
             exit 1
           fi
 
