@@ -61,14 +61,16 @@ jobs:
       - name: Add third-party feeds
         run: |
           cd openwrt-ib
-          # 使用 GitHub token 认证来添加第三方软件源
-          # src-git 格式是 feeds.conf.default 唯一支持的格式
-          echo "src-git kiddin9 https://x-access-token:${{ github.token }}@github.com/kiddin9/openwrt-packages-23.05" >> feeds.conf.default
+          # 清除可能干扰 git clone 的凭证助手
+          git config --global --unset-all credential.helper || true
+          git config --global credential.helper ''
+          export GIT_TERMINAL_PROMPT=0
+          # 添加第三方软件源 (kiddin9 packages for luci-theme-argon)
+          echo 'src-git kiddin9 https://github.com/kiddin9/openwrt-packages-23.05' >> feeds.conf.default
           echo "=== feeds.conf.default ==="
           cat feeds.conf.default
           echo ""
           echo "=== Updating kiddin9 feed ==="
-          export GIT_TERMINAL_PROMPT=0
           ./scripts/feeds update kiddin9
           echo ""
           echo "=== Installing feeds ==="
