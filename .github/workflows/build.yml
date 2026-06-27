@@ -21,7 +21,8 @@ env:
 jobs:
   build:
     runs-on: ubuntu-22.04
-    timeout-minutes: 60
+    timeout-minutes: 120
+    cancel-timeout: 120
 
     steps:
       - name: Checkout
@@ -47,11 +48,13 @@ jobs:
           VERSION=${{ steps.version.outputs.version }}
           IB_URL="https://downloads.openwrt.org/releases/${VERSION}/targets/${TARGET}/${SUBTARGET}/openwrt-imagebuilder-${VERSION}-${TARGET}-${SUBTARGET}-Linux-x86_64.tar.xz"
           echo "Downloading ImageBuilder: $IB_URL"
-          wget -q --show-progress -O imagebuilder.tar.xz "$IB_URL"
+          curl -L --retry 3 --retry-delay 10 -o imagebuilder.tar.xz "$IB_URL"
+          echo "Download complete, extracting..."
           mkdir -p openwrt-ib
           tar xf imagebuilder.tar.xz --strip-components=1 -C openwrt-ib
           rm imagebuilder.tar.xz
           echo "ImageBuilder ready: openwrt-ib"
+          ls openwrt-ib/
 
       - name: Build firmware
         run: |
