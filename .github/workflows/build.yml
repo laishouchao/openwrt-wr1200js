@@ -61,31 +61,17 @@ jobs:
       - name: Add third-party feeds
         run: |
           cd openwrt-ib
-          # 清除可能干扰 git clone 的凭证助手
-          git config --global --unset-all credential.helper || true
-          git config --global credential.helper ''
-          export GIT_TERMINAL_PROMPT=0
-          # 添加第三方软件源 (kiddin9 packages for luci-theme-argon)
-          echo 'src-git kiddin9 https://github.com/kiddin9/openwrt-packages-23.05' >> feeds.conf.default
-          echo "=== feeds.conf.default ==="
-          cat feeds.conf.default
-          echo ""
-          echo "=== Updating kiddin9 feed ==="
-          ./scripts/feeds update kiddin9
-          echo ""
-          echo "=== Installing feeds ==="
-          ./scripts/feeds install luci-theme-argon
-          echo "Feeds ready!"
+          echo "Skipping third-party feeds (not compatible with ImageBuilder)"
+          echo "Will inject argon theme directly into firmware image later"
 
       - name: Build firmware
         run: |
           cd openwrt-ib
 
-          # 软件包列表
+          # 软件包列表 (不含 luci-theme-argon, 后续手动注入)
           PACKAGES="\
             luci luci-i18n-base-zh-cn luci-compat luci-lib-ipkg \
             -wpad-basic-mbedtls wpad-openssl \
-            luci-theme-argon \
             luci-proto-ppp ppp-mod-pppoe \
             block-mount kmod-usb-storage kmod-usb-storage-extras \
             kmod-fs-ext4 kmod-fs-vfat kmod-fs-exfat \
@@ -115,6 +101,101 @@ jobs:
 
           echo "Build completed!"
           ls -lh output/
+
+      - name: Inject argon theme into firmware
+        run: |
+          cd openwrt-ib
+          echo "=== Downloading luci-theme-argon .ipk ==="
+          curl -L -o /tmp/luci-theme-argon.ipk \
+            "https://dl.openwrt.ai/releases/25.12/packages/mipsel_24kc/kiddin9/luci-theme-argon_2.4.3-r3_all.ipk"
+          ls -lh /tmp/luci-theme-argon.ipk
+
+          echo ""
+          echo "=== Injecting into sysupgrade.bin ==="
+          SYSUPGRADE=$(ls output/*sysupgrade*.bin 2>/dev/null | head -1)
+          if [ -z "$SYSUPGRADE" ]; then
+            echo "No sysupgrade.bin found, skipping injection"
+            exit 0
+          fi
+
+          # 安装 squashfs-tools
+          sudo apt-get install -y squashfs-tools
+
+          # 解包 squashfs
+          WORK_DIR=$(mktemp -d)
+          mkdir -p "$WORK_DIR/squashfs-root"
+          unsquashfs -d "$WORK_DIR/squashfs-root" "$SYSUPGRADE"
+
+          # 安装 .ipk 到解包的根文件系统
+          cd "$WORK_DIR/squashfs-root"
+          mkdir -p tmp
+          cd tmp
+          tar -xzf /tmp/luci-theme-argon.ipk ./data.tar.gz 2>/dev/null || \
+          tar -xzf /tmp/luci-theme-argon.ipk ./data.tar.xz 2>/dev/null || \
+          tar -xzf /tmp/luci-theme-argon.ipk
+          
+          if [ -f data.tar.gz ]; then
+            cd "$WORK_DIR/squashfs-root"
+            tar -xzf tmp/data.tar.gz
+          elif [ -f data.tar.xz ]; then
+            cd "$WORK_DIR/squashfs-root"
+            tar -xJf tmp/data.tar.xz
+          fi
+          rm -rf "$WORK_DIR/squashfs-root/tmp"
+
+          echo "Argon theme files injected!"
+          ls -la "$WORK_DIR/squashfs-root/www/" 2>/dev/null | head -5
+
+          # 重新打包 squashfs
+          cd "$WORK_DIR"
+          mksquashfs squashfs-root squashfs-root.sqsh -comp xz -b 1M -no-xattrs
+
+          # 重建 sysupgrade.bin (保留 firmware header)
+          HEADER_SIZE=$(grep -a -m1 -oP '\x7fELF' "$SYSUPGRADE" | wc -c)
+          # 简单方式：直接替换 squashfs 部分
+          # 找到 squashfs 签名 (hsqs) 的位置
+          SQSH_OFFSET=$(python3 -c "
+          import sys
+          with open('$SYSUPGRADE', 'rb') as f:
+              data = f.read()
+              # squashfs magic: 0x6873 7173
+              offset = data.find(b'hsqs')
+              if offset == -1:
+                  # try little-endian
+                  offset = data.find(b'sqsh')
+              print(offset)
+          ")
+
+          if [ "$SQSH_OFFSET" != "-1" ] && [ -n "$SQSH_OFFSET" ]; then
+            echo "SquashFS found at offset $SQSH_OFFSET"
+            NEW_IMAGE="$SYSUPGRADE.new"
+            # 保留 header + 新 squashfs + padding
+            dd if="$SYSUPGRADE" of="$NEW_IMAGE" bs=1 count=$SQSH_OFFSET 2>/dev/null
+            cat squashfs-root.sqsh >> "$NEW_IMAGE"
+            mv "$NEW_IMAGE" "$SYSUPGRADE"
+            echo "Firmware updated!"
+          else
+            echo "Could not find squashfs signature, trying direct replacement..."
+            # 备选方案：只保留新固件
+            cp squashfs-root.sqsh "$SYSUPGRADE"
+          fi
+
+          # 重建 factory.bin
+          FACTORY=$(ls output/*factory*.bin 2>/dev/null | head -1)
+          if [ -n "$FACTORY" ]; then
+            echo "Rebuilding factory.bin..."
+            FACTORY_NEW="$FACTORY.new"
+            if [ "$SQSH_OFFSET" != "-1" ] && [ -n "$SQSH_OFFSET" ]; then
+              dd if="$FACTORY" of="$FACTORY_NEW" bs=1 count=$SQSH_OFFSET 2>/dev/null
+              cat squashfs-root.sqsh >> "$FACTORY_NEW"
+              mv "$FACTORY_NEW" "$FACTORY"
+            fi
+          fi
+
+          rm -rf "$WORK_DIR"
+          echo ""
+          echo "=== Final firmware ==="
+          ls -lh output/*${DEVICE_NAME}* 2>/dev/null || ls -lh output/
 
       - name: Check firmware size
         run: |
