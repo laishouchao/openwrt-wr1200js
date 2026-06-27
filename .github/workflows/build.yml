@@ -1,0 +1,177 @@
+name: Build OpenWrt for WR1200JS
+
+on:
+  workflow_dispatch:
+    inputs:
+      openwrt_version:
+        description: 'OpenWrt version'
+        required: false
+        default: '24.10.7'
+  push:
+    tags:
+      - 'v*'
+
+env:
+  OPENWRT_VERSION: '24.10.7'
+  TARGET: 'ramips'
+  SUBTARGET: 'mt7621'
+  PROFILE: 'youhua_wr1200js'
+  DEVICE_NAME: 'WR1200JS'
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libncurses5-dev libncursesw5-dev \
+            zlib1g-dev gawk git gettext libssl-dev xsltproc wget unzip python3
+
+      - name: Set version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.openwrt_version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${{ env.OPENWRT_VERSION }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Download ImageBuilder
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          IB_URL="https://downloads.openwrt.org/releases/${VERSION}/targets/${TARGET}/${SUBTARGET}/openwrt-imagebuilder-${VERSION}-${TARGET}-${SUBTARGET}-Linux-x86_64.tar.xz"
+          echo "Downloading ImageBuilder: $IB_URL"
+          wget -q --show-progress -O imagebuilder.tar.xz "$IB_URL"
+          mkdir -p openwrt-ib
+          tar xf imagebuilder.tar.xz --strip-components=1 -C openwrt-ib
+          rm imagebuilder.tar.xz
+          echo "ImageBuilder ready: openwrt-ib"
+
+      - name: Build firmware
+        run: |
+          cd openwrt-ib
+
+          # 软件包列表
+          PACKAGES="\
+            luci luci-i18n-base-zh-cn luci-theme-argon luci-compat luci-lib-ipkg \
+            wpad-openssl \
+            luci-proto-ppp ppp-mod-pppoe \
+            luci-proto-relayd relayd \
+            block-mount kmod-usb-storage kmod-usb-storage-extras \
+            kmod-fs-ext4 kmod-fs-vfat kmod-fs-exfat \
+            kmod-nls-cp437 kmod-nls-cp936 kmod-nls-utf8 \
+            luci-app-samba samba4-server \
+            luci-app-adblock adblock \
+            luci-app-smartdns smartdns \
+            luci-app-sqm sqm-scripts \
+            luci-app-ddns ddns-scripts \
+            luci-app-upnp miniupnpd \
+            luci-proto-wireguard wireguard-tools \
+            luci-app-wol \
+            luci-app-hd-idle \
+            luci-app-openvpn openvpn-openssl \
+            nano htop curl wget \
+          "
+
+          echo "Building firmware for ${PROFILE}..."
+          echo "Packages: ${PACKAGES}"
+
+          make image PROFILE="${PROFILE}" \
+            PACKAGES="${PACKAGES}" \
+            FILES="" \
+            DISABLED_SERVICES="" \
+            BIN_DIR="$(pwd)/output" \
+            EXTRA_IMAGE_NAME="custom"
+
+          echo "Build completed!"
+          ls -lh output/
+
+      - name: Check firmware size
+        run: |
+          echo "=== 固件文件 ==="
+          ls -lh openwrt-ib/output/*${DEVICE_NAME}* 2>/dev/null || ls -lh openwrt-ib/output/
+          echo ""
+          echo "=== 空间检查 ==="
+          FIRMWARE_SIZE=$(stat -c%s openwrt-ib/output/*sysupgrade*.bin 2>/dev/null || echo 0)
+          MAX_SIZE=$((15 * 1024 * 1024))  # 15MB
+          echo "固件大小: $((FIRMWARE_SIZE / 1024 / 1024)) MB"
+          echo "最大限制: $((MAX_SIZE / 1024 / 1024)) MB"
+          if [ "$FIRMWARE_SIZE" -gt "$MAX_SIZE" ]; then
+            echo "❌ 固件超出 flash 空间限制!"
+            exit 1
+          fi
+          echo "✅ 固件大小合适"
+
+      - name: Upload firmware artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: openwrt-${{ env.DEVICE_NAME }}-${{ steps.version.outputs.version }}
+          path: openwrt-ib/output/*
+          retention-days: 30
+
+      - name: Generate checksums
+        run: |
+          cd openwrt-ib/output
+          sha256sum * > sha256sums.txt
+          echo "=== SHA256 校验和 ==="
+          cat sha256sums.txt
+
+      - name: Create release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          name: "OpenWrt ${{ steps.version.outputs.version }} for ${{ env.DEVICE_NAME }}"
+          body: |
+            ## OpenWrt ${{ steps.version.outputs.version }} for YouHua WR1200JS
+
+            ### 设备信息
+            - **型号**: YouHua WR1200JS
+            - **SoC**: MediaTek MT7621AT (MIPS 1004Kc, 4核 880MHz)
+            - **RAM**: 128MB
+            - **Flash**: 16MB SPI NOR
+            - **WiFi**: MT7603E (2.4G) + MT76x2E (5G)
+            - **Target**: ramips/mt7621 (mipsel_24kc)
+
+            ### 固件说明
+            基于 OpenWrt 官方 ImageBuilder 定制，预装常用软件包。
+
+            ### 安装方法
+            - **首次刷入**: 使用 `*-factory.bin` 通过 Web 或 TFTP 刷入
+            - **升级更新**: 使用 `*-sysupgrade.bin` 通过 LuCI 或 `sysupgrade` 命令升级
+
+            ### 预装软件
+            | 分类 | 软件 |
+            |------|------|
+            | Web 管理 | LuCI + Argon 主题 + 中文 |
+            | WiFi | wpad-openssl (AP/STA/WDS/Mesh/WPA3) |
+            | 拨号 | PPPoE |
+            | 中继 | relayd (无线中继) |
+            | 文件共享 | Samba4 |
+            | 广告过滤 | Adblock |
+            | DNS | SmartDNS |
+            | QoS | SQM (抗缓冲膨胀) |
+            | DDNS | 动态 DNS |
+            | UPnP | miniupnpd |
+            | VPN | WireGuard + OpenVPN |
+            | 工具 | nano, htop, curl, wget, wol, hd-idle |
+            | USB | 存储挂载 (ext4/vfat/exfat) |
+
+            ### 硬件支持
+            ✅ 所有 10 个 LED 灯 (Power/2.4G/5G/WPS/Internet/LAN1-4/USB)
+            ✅ 所有 3 个按钮 (Reset/WPS/WiFi)
+            ✅ 5 个千兆网口 (4 LAN + 1 WAN)
+            ✅ 双频 WiFi (2.4G b/g/n + 5G a/n/ac)
+            ✅ USB 3.0 端口
+            ✅ 串口 (115200/8N1)
+          files: |
+            openwrt-ib/output/*factory*.bin
+            openwrt-ib/output/*sysupgrade*.bin
+            openwrt-ib/output/sha256sums.txt
+          draft: false
+          prerelease: false
