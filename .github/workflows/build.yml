@@ -136,6 +136,31 @@ jobs:
           echo "..."
           rm -f debian-binary control.tar.gz control.tar.xz data.tar.gz data.tar.xz
 
+          # === 下载 luci-app-wizard 配置向导 ===
+          echo "=== 下载 luci-app-wizard ==="
+          WIZARD_URL="https://dl.openwrt.ai/latest/packages/mipsel_24kc/kiddin9/luci-app-wizard_27.090.45134~029b517_all.ipk"
+          curl -L --retry 3 --retry-delay 5 --connect-timeout 30 \
+            -o /tmp/luci-app-wizard.ipk "$WIZARD_URL"
+          WIZARD_SIZE=$(stat -c%s /tmp/luci-app-wizard.ipk 2>/dev/null || echo 0)
+          if [ "$WIZARD_SIZE" -gt 1000 ]; then
+            echo "✅ luci-app-wizard 下载成功 (${WIZARD_SIZE} bytes)"
+            cd /tmp
+            mkdir -p wizard-extract
+            cd wizard-extract
+            ar x /tmp/luci-app-wizard.ipk
+            if [ -f data.tar.xz ]; then
+              tar -xJf data.tar.xz -C /tmp/argon-files
+            elif [ -f data.tar.gz ]; then
+              tar -xzf data.tar.gz -C /tmp/argon-files
+            fi
+            cd /tmp/argon-files
+            rm -rf /tmp/wizard-extract
+            echo "=== Wizard files ==="
+            find . -path '*/wizard*' -type f
+          else
+            echo "⚠ luci-app-wizard 下载失败, 跳过"
+          fi
+
           # === UCI defaults: 首次开机自动配置 ===
           echo "=== 创建 UCI defaults 快速配置 ==="
           mkdir -p /tmp/argon-files/etc/uci-defaults
@@ -182,11 +207,17 @@ jobs:
           echo "uci set dhcp.lan.leasetime='12h'" >> $UCI
           echo '' >> $UCI
 
-          # 5. 提交
+          # 5. Wizard 向导配置
+          echo "uci set wizard.default=wizard" >> $UCI
+          echo "uci set wizard.default.landing_page='wizard'" >> $UCI
+          echo '' >> $UCI
+
+          # 6. 提交
           echo "uci commit network" >> $UCI
           echo "uci commit wireless" >> $UCI
           echo "uci commit system" >> $UCI
           echo "uci commit dhcp" >> $UCI
+          echo "uci commit wizard" >> $UCI
           echo "exit 0" >> $UCI
 
           chmod +x $UCI
