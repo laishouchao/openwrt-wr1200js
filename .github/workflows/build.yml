@@ -66,22 +66,35 @@ jobs:
           # 尝试多个来源下载
           DOWNLOAD_OK=0
 
-          # 来源 1: dl.openwrt.ai
-          for VER in "25.12" "24.10" "23.05"; do
-            URL="https://dl.openwrt.ai/releases/${VER}/packages/mipsel_24kc/kiddin9/luci-theme-argon_2.4.3-r3_all.ipk"
-            echo "Trying: $URL"
-            curl -L --retry 3 --retry-delay 5 --connect-timeout 30 \
-              -o /tmp/luci-theme-argon.ipk "$URL" 2>/dev/null
-            SIZE=$(stat -c%s /tmp/luci-theme-argon.ipk 2>/dev/null || echo 0)
-            if [ "$SIZE" -gt 1000 ]; then
-              echo "✅ Downloaded from dl.openwrt.ai (${VER})"
-              DOWNLOAD_OK=1
-              break
-            fi
-            echo "   Failed (${SIZE} bytes), trying next..."
-          done
+          # 来源 1: dl.openwrt.ai latest (最可靠, 会重定向到最新可用版本)
+          URL="https://dl.openwrt.ai/latest/packages/mipsel_24kc/kiddin9/luci-theme-argon_2.4.3-r3_all.ipk"
+          echo "Trying: $URL"
+          curl -L --retry 3 --retry-delay 5 --connect-timeout 30 \
+            -o /tmp/luci-theme-argon.ipk "$URL" 2>/dev/null
+          SIZE=$(stat -c%s /tmp/luci-theme-argon.ipk 2>/dev/null || echo 0)
+          if [ "$SIZE" -gt 1000 ]; then
+            echo "✅ Downloaded from dl.openwrt.ai (latest)"
+            DOWNLOAD_OK=1
+          fi
 
-          # 来源 2: GitHub Pages
+          # 来源 2: dl.openwrt.ai 指定版本
+          if [ "$DOWNLOAD_OK" = "0" ]; then
+            for VER in "25.12" "24.10" "23.05"; do
+              URL="https://dl.openwrt.ai/releases/${VER}/packages/mipsel_24kc/kiddin9/luci-theme-argon_2.4.3-r3_all.ipk"
+              echo "Trying: $URL"
+              curl -L --retry 3 --retry-delay 5 --connect-timeout 30 \
+                -o /tmp/luci-theme-argon.ipk "$URL" 2>/dev/null
+              SIZE=$(stat -c%s /tmp/luci-theme-argon.ipk 2>/dev/null || echo 0)
+              if [ "$SIZE" -gt 1000 ]; then
+                echo "✅ Downloaded from dl.openwrt.ai (${VER})"
+                DOWNLOAD_OK=1
+                break
+              fi
+              echo "   Failed (${SIZE} bytes), trying next..."
+            done
+          fi
+
+          # 来源 3: GitHub Pages
           if [ "$DOWNLOAD_OK" = "0" ]; then
             URL="https://jerrykuku.github.io/luci-theme-argon/luci-theme-argon_2.4.3-r3_all.ipk"
             echo "Trying: $URL"
@@ -94,60 +107,60 @@ jobs:
             fi
           fi
 
-          # 来源 3: dl.openwrt.ai latest
           if [ "$DOWNLOAD_OK" = "0" ]; then
-            URL="https://dl.openwrt.ai/latest/packages/mipsel_24kc/kiddin9/luci-theme-argon_2.4.3-r3_all.ipk"
-            echo "Trying: $URL"
-            curl -L --retry 3 --retry-delay 5 --connect-timeout 30 \
-              -o /tmp/luci-theme-argon.ipk "$URL" 2>/dev/null
-            SIZE=$(stat -c%s /tmp/luci-theme-argon.ipk 2>/dev/null || echo 0)
-            if [ "$SIZE" -gt 1000 ]; then
-              echo "✅ Downloaded from dl.openwrt.ai (latest)"
-              DOWNLOAD_OK=1
+            echo "⚠ WARNING: Failed to download luci-theme-argon, continuing without theme"
+          else
+            echo "Downloaded:"
+            ls -lh /tmp/luci-theme-argon.ipk
+            file /tmp/luci-theme-argon.ipk || true
+
+            # 提取 .ipk 内容到 FILES 目录
+            mkdir -p /tmp/argon-files
+            cd /tmp/argon-files
+
+            # .ipk 可能被额外 gzip 包装, 先尝试解压
+            if file /tmp/luci-theme-argon.ipk | grep -q gzip; then
+              echo "ipk is gzip-compressed, decompressing..."
+              mv /tmp/luci-theme-argon.ipk /tmp/luci-theme-argon.ipk.gz
+              gzip -d /tmp/luci-theme-argon.ipk.gz
             fi
+
+            # .ipk 是 ar 归档，包含 debian-binary, control.tar.gz, data.tar.gz
+            ar x /tmp/luci-theme-argon.ipk || { echo "ar failed, trying as tar..."; tar xf /tmp/luci-theme-argon.ipk; }
+            ls -la
+
+            # 提取 data.tar (支持 .gz 和 .xz)
+            if [ -f data.tar.xz ]; then
+              tar -xJf data.tar.xz
+            elif [ -f data.tar.gz ]; then
+              tar -xzf data.tar.gz
+            fi
+
+            echo "=== Argon theme files ==="
+            find . -type f | head -30
+            echo "..."
+            rm -f debian-binary control.tar.gz control.tar.xz data.tar.gz data.tar.xz
           fi
-
-          if [ "$DOWNLOAD_OK" = "0" ]; then
-            echo "ERROR: Failed to download luci-theme-argon from all sources"
-            exit 1
-          fi
-
-          echo "Downloaded:"
-          ls -lh /tmp/luci-theme-argon.ipk
-          file /tmp/luci-theme-argon.ipk || true
-
-          # 提取 .ipk 内容到 FILES 目录 (用于 ImageBuilder 的 FILES 机制)
-          mkdir -p /tmp/argon-files
-          cd /tmp/argon-files
-
-          # .ipk 是 ar 归档，包含 debian-binary, control.tar.gz, data.tar.gz
-          ar x /tmp/luci-theme-argon.ipk || { echo "ar failed, trying as tar..."; tar xf /tmp/luci-theme-argon.ipk; }
-          ls -la
-
-          # 提取 data.tar (支持 .gz 和 .xz)
-          if [ -f data.tar.xz ]; then
-            tar -xJf data.tar.xz
-          elif [ -f data.tar.gz ]; then
-            tar -xzf data.tar.gz
-          fi
-
-          echo "=== Argon theme files ==="
-          find . -type f | head -30
-          echo "..."
-          rm -f debian-binary control.tar.gz control.tar.xz data.tar.gz data.tar.xz
 
           # === 下载 luci-app-wizard 配置向导 ===
           echo "=== 下载 luci-app-wizard ==="
+          mkdir -p /tmp/argon-files
           WIZARD_URL="https://dl.openwrt.ai/latest/packages/mipsel_24kc/kiddin9/luci-app-wizard_27.090.45134~029b517_all.ipk"
           curl -L --retry 3 --retry-delay 5 --connect-timeout 30 \
             -o /tmp/luci-app-wizard.ipk "$WIZARD_URL"
           WIZARD_SIZE=$(stat -c%s /tmp/luci-app-wizard.ipk 2>/dev/null || echo 0)
           if [ "$WIZARD_SIZE" -gt 1000 ]; then
             echo "✅ luci-app-wizard 下载成功 (${WIZARD_SIZE} bytes)"
+            # 检查是否被 gzip 包装
+            if file /tmp/luci-app-wizard.ipk | grep -q gzip; then
+              echo "wizard ipk is gzip-compressed, decompressing..."
+              mv /tmp/luci-app-wizard.ipk /tmp/luci-app-wizard.ipk.gz
+              gzip -d /tmp/luci-app-wizard.ipk.gz
+            fi
             cd /tmp
             mkdir -p wizard-extract
             cd wizard-extract
-            ar x /tmp/luci-app-wizard.ipk
+            ar x /tmp/luci-app-wizard.ipk || tar xf /tmp/luci-app-wizard.ipk
             if [ -f data.tar.xz ]; then
               tar -xJf data.tar.xz -C /tmp/argon-files
             elif [ -f data.tar.gz ]; then
@@ -163,6 +176,7 @@ jobs:
 
           # === UCI defaults: 首次开机自动配置 ===
           echo "=== 创建 UCI defaults 快速配置 ==="
+          cd /tmp/argon-files
           mkdir -p /tmp/argon-files/etc/uci-defaults
           UCI=/tmp/argon-files/etc/uci-defaults/90-wr1200js-setup
 
