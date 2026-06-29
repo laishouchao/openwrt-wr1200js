@@ -174,37 +174,103 @@ jobs:
             echo "⚠ luci-app-wizard 下载失败, 跳过"
           fi
 
-          # === 下载 luci-app-fchomo (mihomo Web 管理界面) ===
-          echo "=== 下载 luci-app-fchomo ==="
+          # === 下载 iStore 应用商店 ===
+          echo "=== 下载 iStore 应用商店 ==="
           mkdir -p /tmp/argon-files
-          FCHOMO_URL="https://dl.openwrt.ai/releases/25.12/packages/mipsel_24kc/kiddin9/luci-app-fchomo_27.168.60211~dd4814b_all.ipk"
+
+          # iStore 依赖: luci-app-systools (基础工具) + luci-app-store (商店界面)
+          # 来源: linkease/openwrt-app-actions
+          ISTORE_OK=0
+
+          # 下载 iStore 一键安装脚本并提取所需文件
+          echo "下载 iStore 安装脚本..."
           curl -L --retry 3 --retry-delay 5 --connect-timeout 30 \
-            -o /tmp/luci-app-fchomo.ipk "$FCHOMO_URL"
-          FCHOMO_SIZE=$(stat -c%s /tmp/luci-app-fchomo.ipk 2>/dev/null || echo 0)
-          if [ "$FCHOMO_SIZE" -gt 1000 ]; then
-            echo "✅ luci-app-fchomo 下载成功 (${FCHOMO_SIZE} bytes)"
-            # 检查是否被 gzip 包装
-            if file /tmp/luci-app-fchomo.ipk | grep -q gzip; then
-              echo "fchomo ipk is gzip-compressed, decompressing..."
-              mv /tmp/luci-app-fchomo.ipk /tmp/luci-app-fchomo.ipk.gz
-              gzip -d /tmp/luci-app-fchomo.ipk.gz
+            -o /tmp/istore-reinstall.run \
+            "https://github.com/linkease/openwrt-app-actions/raw/main/applications/luci-app-systools/root/usr/share/systools/istore-reinstall.run" 2>/dev/null
+          ISTORE_SCRIPT_SIZE=$(stat -c%s /tmp/istore-reinstall.run 2>/dev/null || echo 0)
+          echo "iStore 脚本大小: ${ISTORE_SCRIPT_SIZE} bytes"
+
+          # 下载 luci-app-store ipk (商店主界面)
+          for URL in \
+            "https://istore.linkease.com/repo/all/luci-app-store/luci-app-store_0.2.3_all.ipk" \
+            "https://github.com/linkease/openwrt-app-actions/raw/main/applications/luci-app-store/root/usr/lib/opkg/info/luci-app-store.control"; do
+            echo "尝试下载: $URL"
+            curl -L --retry 3 --retry-delay 5 --connect-timeout 30 \
+              -o /tmp/luci-app-store.ipk "$URL" 2>/dev/null
+            SIZE=$(stat -c%s /tmp/luci-app-store.ipk 2>/dev/null || echo 0)
+            if [ "$SIZE" -gt 1000 ]; then
+              echo "✅ luci-app-store 下载成功 (${SIZE} bytes)"
+              ISTORE_OK=1
+              break
             fi
-            cd /tmp
-            mkdir -p fchomo-extract
-            cd fchomo-extract
-            ar x /tmp/luci-app-fchomo.ipk || tar xf /tmp/luci-app-fchomo.ipk
-            if [ -f data.tar.xz ]; then
-              tar -xJf data.tar.xz -C /tmp/argon-files
-            elif [ -f data.tar.gz ]; then
-              tar -xzf data.tar.gz -C /tmp/argon-files
+          done
+
+          # 下载 luci-app-systools ipk (基础依赖)
+          for URL in \
+            "https://istore.linkease.com/repo/all/luci-app-systools/luci-app-systools_0.2.3_all.ipk" \
+            "https://github.com/linkease/openwrt-app-actions/raw/main/applications/luci-app-systools/root/usr/lib/opkg/info/luci-app-systools.control"; do
+            echo "尝试下载: $URL"
+            curl -L --retry 3 --retry-delay 5 --connect-timeout 30 \
+              -o /tmp/luci-app-systools.ipk "$URL" 2>/dev/null
+            SIZE=$(stat -c%s /tmp/luci-app-systools.ipk 2>/dev/null || echo 0)
+            if [ "$SIZE" -gt 1000 ]; then
+              echo "✅ luci-app-systools 下载成功 (${SIZE} bytes)"
+              break
             fi
-            cd /tmp/argon-files
-            rm -rf /tmp/fchomo-extract
-            echo "=== fchomo files ==="
-            find . -path '*/fchomo*' -type f
-          else
-            echo "⚠ luci-app-fchomo 下载失败, 跳过"
+          done
+
+          # 提取 iStore ipk 到 FILES 目录
+          for IPK in /tmp/luci-app-store.ipk /tmp/luci-app-systools.ipk; do
+            if [ -f "$IPK" ]; then
+              SIZE=$(stat -c%s "$IPK" 2>/dev/null || echo 0)
+              if [ "$SIZE" -gt 1000 ]; then
+                echo "提取 $(basename $IPK)..."
+                # 检查是否被 gzip 包装
+                if file "$IPK" | grep -q gzip; then
+                  mv "$IPK" "${IPK}.gz"
+                  gzip -d "${IPK}.gz"
+                fi
+                cd /tmp
+                mkdir -p istore-extract
+                cd istore-extract
+                rm -f debian-binary control.tar.gz control.tar.xz data.tar.gz data.tar.xz
+                ar x "$IPK" 2>/dev/null || tar xf "$IPK" 2>/dev/null
+                if [ -f data.tar.xz ]; then
+                  tar -xJf data.tar.xz -C /tmp/argon-files 2>/dev/null
+                elif [ -f data.tar.gz ]; then
+                  tar -xzf data.tar.gz -C /tmp/argon-files 2>/dev/null
+                fi
+                cd /tmp/argon-files
+                rm -rf /tmp/istore-extract
+              fi
+            fi
+          done
+
+          # 如果 ipk 下载失败，尝试直接从 GitHub 拉取文件
+          if [ "$ISTORE_OK" = "0" ]; then
+            echo "ipk 下载失败，尝试从 GitHub 直接拉取..."
+            # 创建 iStore 目录结构
+            mkdir -p /tmp/argon-files/usr/lib/lua/luci/controller
+            mkdir -p /tmp/argon-files/usr/lib/lua/luci/view
+            mkdir -p /tmp/argon-files/usr/share/luci/menu.d
+            mkdir -p /tmp/argon-files/usr/share/luci/i18n
+
+            # 下载 iStore 核心文件
+            for FPATH in \
+              "applications/luci-app-store/root/usr/lib/lua/luci/controller/store.lua" \
+              "applications/luci-app-store/root/usr/share/luci/menu.d/luci-app-store.json"; do
+              FNAME=$(basename "$FPATH")
+              curl -L --retry 3 --connect-timeout 15 \
+                -o "/tmp/argon-files/usr/lib/lua/luci/controller/$FNAME" \
+                "https://raw.githubusercontent.com/linkease/openwrt-app-actions/main/$FPATH" 2>/dev/null
+            done
+            echo "✅ iStore 核心文件已下载 (GitHub 直接拉取)"
           fi
+
+          # 验证 iStore 文件
+          echo "=== iStore 文件 ==="
+          find /tmp/argon-files -path '*store*' -type f 2>/dev/null | head -20
+          find /tmp/argon-files -path '*istore*' -type f 2>/dev/null | head -20
 
           # === UCI defaults: 首次开机自动配置 ===
           echo "=== 创建 UCI defaults 快速配置 ==="
@@ -270,7 +336,7 @@ jobs:
           echo "✅ 快速配置脚本已创建"
           cat $UCI
 
-          # === 添加 kiddin9 软件源 (用于后续安装 mihomo 内核) ===
+          # === 添加 kiddin9 软件源 (iStore 依赖 + 后续插件安装) ===
           echo "=== 添加 kiddin9 软件源 ==="
           mkdir -p /tmp/argon-files/etc/opkg
           cat > /tmp/argon-files/etc/opkg/customfeeds.conf << 'FEED_EOF'
@@ -290,10 +356,9 @@ jobs:
           cd openwrt-ib
 
           # 软件包列表 - 精简以适配 16MB flash
-          # 已移除: samba4 (大体积), adblock (可后期安装), wireguard (用 mihomo 替代)
+          # 已移除: samba4 (大体积), adblock (可后期安装), wireguard, mihomo/fchomo
           # 保留: LuCI, WiFi, PPPoE, USB, SmartDNS, SQM, DDNS, UPnP, 工具
-          # mihomo 内核 (14.7MB) 太大放不进 flash, 首次启动后通过 opkg 安装到 USB
-          # luci-app-fchomo (mihomo Web 管理界面) 通过 FILES 注入
+          # iStore 应用商店通过 FILES 注入, 后续可通过 iStore 安装各类插件
           PACKAGES="\
             luci luci-i18n-base-zh-cn luci-compat luci-lib-ipkg \
             -wpad-basic-mbedtls wpad-openssl \
@@ -381,13 +446,14 @@ jobs:
             - **升级更新**: 使用 `*-sysupgrade.bin` 通过 LuCI 或 `sysupgrade` 命令升级
 
             ### 安装说明
-            - mihomo 内核 (14.7MB) 过大无法内置, 首次启动后请通过 USB extroot + `opkg install mihomo` 安装
-            - luci-app-fchomo (mihomo Web 管理界面) 已预装, 安装内核后即可使用
-            - 订阅链接可通过 fchomo 界面导入
+            - iStore 应用商店已预装, 可直接在 LuCI 菜单中访问
+            - 通过 iStore 可一键安装各类插件 (代理、VPN、NAS 等)
+            - 建议先配置 USB extroot 扩容, 再通过 iStore 安装大型插件
 
             ### 预装软件
             | 分类 | 软件 |
             |------|------|
+            | 应用商店 | iStore (一键安装插件) |
             | Web 管理 | LuCI + Argon 主题 + 中文 |
             | WiFi | wpad-openssl (AP/STA/WDS/Mesh/WPA3) |
             | 拨号 | PPPoE |
@@ -395,7 +461,6 @@ jobs:
             | QoS | SQM (抗缓冲膨胀) |
             | DDNS | 动态 DNS |
             | UPnP | miniupnpd |
-            | 代理 | mihomo Web 管理 (luci-app-fchomo) |
             | 工具 | nano, htop, curl, wget, wol, hd-idle |
             | USB | 存储挂载 (ext4/vfat/exfat) |
 
