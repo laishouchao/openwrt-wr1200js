@@ -174,6 +174,38 @@ jobs:
             echo "⚠ luci-app-wizard 下载失败, 跳过"
           fi
 
+          # === 下载 luci-app-fchomo (mihomo Web 管理界面) ===
+          echo "=== 下载 luci-app-fchomo ==="
+          mkdir -p /tmp/argon-files
+          FCHOMO_URL="https://dl.openwrt.ai/releases/25.12/packages/mipsel_24kc/kiddin9/luci-app-fchomo_27.168.60211~dd4814b_all.ipk"
+          curl -L --retry 3 --retry-delay 5 --connect-timeout 30 \
+            -o /tmp/luci-app-fchomo.ipk "$FCHOMO_URL"
+          FCHOMO_SIZE=$(stat -c%s /tmp/luci-app-fchomo.ipk 2>/dev/null || echo 0)
+          if [ "$FCHOMO_SIZE" -gt 1000 ]; then
+            echo "✅ luci-app-fchomo 下载成功 (${FCHOMO_SIZE} bytes)"
+            # 检查是否被 gzip 包装
+            if file /tmp/luci-app-fchomo.ipk | grep -q gzip; then
+              echo "fchomo ipk is gzip-compressed, decompressing..."
+              mv /tmp/luci-app-fchomo.ipk /tmp/luci-app-fchomo.ipk.gz
+              gzip -d /tmp/luci-app-fchomo.ipk.gz
+            fi
+            cd /tmp
+            mkdir -p fchomo-extract
+            cd fchomo-extract
+            ar x /tmp/luci-app-fchomo.ipk || tar xf /tmp/luci-app-fchomo.ipk
+            if [ -f data.tar.xz ]; then
+              tar -xJf data.tar.xz -C /tmp/argon-files
+            elif [ -f data.tar.gz ]; then
+              tar -xzf data.tar.gz -C /tmp/argon-files
+            fi
+            cd /tmp/argon-files
+            rm -rf /tmp/fchomo-extract
+            echo "=== fchomo files ==="
+            find . -path '*/fchomo*' -type f
+          else
+            echo "⚠ luci-app-fchomo 下载失败, 跳过"
+          fi
+
           # === UCI defaults: 首次开机自动配置 ===
           echo "=== 创建 UCI defaults 快速配置 ==="
           cd /tmp/argon-files
@@ -238,6 +270,18 @@ jobs:
           echo "✅ 快速配置脚本已创建"
           cat $UCI
 
+          # === 添加 kiddin9 软件源 (用于后续安装 mihomo 内核) ===
+          echo "=== 添加 kiddin9 软件源 ==="
+          mkdir -p /tmp/argon-files/etc/opkg
+          cat > /tmp/argon-files/etc/opkg/customfeeds.conf << 'FEED_EOF'
+          src/gz kiddin9_packages https://dl.openwrt.ai/releases/25.12/packages/mipsel_24kc/kiddin9
+          src/gz kiddin9_base https://dl.openwrt.ai/releases/25.12/targets/ramips/mt7621/packages
+          FEED_EOF
+          # 移除行首空格 (heredoc 缩进导致的问题)
+          sed -i 's/^          //' /tmp/argon-files/etc/opkg/customfeeds.conf
+          echo "✅ kiddin9 软件源已添加"
+          cat /tmp/argon-files/etc/opkg/customfeeds.conf
+
           echo "FILES directory ready:"
           find . -type d | sort
 
@@ -246,8 +290,10 @@ jobs:
           cd openwrt-ib
 
           # 软件包列表 - 精简以适配 16MB flash
-          # 已移除: samba4 (大体积), openvpn (有 wireguard), adblock (可后期安装)
-          # 保留: LuCI, WiFi, PPPoE, USB, SmartDNS, SQM, DDNS, UPnP, WireGuard, 工具
+          # 已移除: samba4 (大体积), adblock (可后期安装), wireguard (用 mihomo 替代)
+          # 保留: LuCI, WiFi, PPPoE, USB, SmartDNS, SQM, DDNS, UPnP, 工具
+          # mihomo 内核 (14.7MB) 太大放不进 flash, 首次启动后通过 opkg 安装到 USB
+          # luci-app-fchomo (mihomo Web 管理界面) 通过 FILES 注入
           PACKAGES="\
             luci luci-i18n-base-zh-cn luci-compat luci-lib-ipkg \
             -wpad-basic-mbedtls wpad-openssl \
@@ -259,7 +305,6 @@ jobs:
             luci-app-sqm sqm-scripts \
             luci-app-ddns ddns-scripts \
             luci-app-upnp miniupnpd-nftables \
-            luci-proto-wireguard wireguard-tools \
             luci-app-wol \
             luci-app-hd-idle \
             nano htop curl wget \
@@ -335,6 +380,11 @@ jobs:
             - **首次刷入**: 使用 `*-factory.bin` 通过 Web 或 TFTP 刷入
             - **升级更新**: 使用 `*-sysupgrade.bin` 通过 LuCI 或 `sysupgrade` 命令升级
 
+            ### 安装说明
+            - mihomo 内核 (14.7MB) 过大无法内置, 首次启动后请通过 USB extroot + `opkg install mihomo` 安装
+            - luci-app-fchomo (mihomo Web 管理界面) 已预装, 安装内核后即可使用
+            - 订阅链接可通过 fchomo 界面导入
+
             ### 预装软件
             | 分类 | 软件 |
             |------|------|
@@ -345,7 +395,7 @@ jobs:
             | QoS | SQM (抗缓冲膨胀) |
             | DDNS | 动态 DNS |
             | UPnP | miniupnpd |
-            | VPN | WireGuard |
+            | 代理 | mihomo Web 管理 (luci-app-fchomo) |
             | 工具 | nano, htop, curl, wget, wol, hd-idle |
             | USB | 存储挂载 (ext4/vfat/exfat) |
 
