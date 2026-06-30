@@ -64,8 +64,8 @@ jobs:
       - name: Download Xray-core
         run: |
           echo "=== Downloading Xray-core for mipsle ==="
-          XRAY_VERSION="v26.6.22"
-          XRAY_URL="https://github.com/XTLS/Xray-core/releases/download/${XRAY_VERSION}/Xray-linux-mipsle.zip"
+          XRAY_VERSION="v26.3.27"
+          XRAY_URL="https://github.com/XTLS/Xray-core/releases/download/${XRAY_VERSION}/Xray-linux-mips32le.zip"
           
           curl -L --retry 5 --retry-delay 10 --connect-timeout 30 \
             -o /tmp/xray.zip "$XRAY_URL"
@@ -431,7 +431,7 @@ jobs:
             |------|------|
             | 应用商店 | iStore (一键安装插件) |
             | Web 管理 | LuCI + Argon 主题 + 中文 |
-            | 代理内核 | Xray-core v26.6.22 (支持VLESS/XHTTP/XTLS/REALITY/VLESS Encryption) |
+            | 代理内核 | Xray-core v26.3.27 (支持VLESS/XHTTP/XTLS/REALITY/VLESS Encryption) |
             | WiFi | wpad-openssl (AP/STA/WDS/Mesh/WPA3) |
             | 拨号 | PPPoE |
             | DNS | SmartDNS |
