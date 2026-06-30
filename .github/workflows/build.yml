@@ -259,7 +259,6 @@ jobs:
             luci luci-i18n-base-zh-cn luci-compat luci-lib-ipkg \
             -wpad-basic-mbedtls wpad-openssl \
             luci-proto-ppp ppp-mod-pppoe \
-            luci-proto-static \
             block-mount kmod-usb-storage kmod-usb-storage-extras \
             kmod-fs-ext4 kmod-fs-vfat kmod-fs-exfat \
             kmod-nls-cp437 kmod-nls-cp936 kmod-nls-utf8 \
