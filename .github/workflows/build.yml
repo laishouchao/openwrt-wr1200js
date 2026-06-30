@@ -8,6 +8,8 @@ on:
         required: false
         default: '24.10.7'
   push:
+    branches:
+      - main
     tags:
       - 'v*'
 
