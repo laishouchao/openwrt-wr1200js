@@ -147,103 +147,17 @@ jobs:
             echo "⚠ luci-app-wizard 下载失败, 跳过"
           fi
 
-          # === 下载 iStore 应用商店 ===
-          echo "=== 下载 iStore 应用商店 ==="
-          mkdir -p /tmp/argon-files
+          # === 下载 iStore 安装脚本 ===
+          echo "=== 下载 iStore 安装脚本 ==="
+          mkdir -p /tmp/argon-files/usr/share/systools
 
-          # iStore 依赖: luci-app-systools (基础工具) + luci-app-store (商店界面)
-          # 来源: linkease/openwrt-app-actions
-          ISTORE_OK=0
-
-          # 下载 iStore 一键安装脚本并提取所需文件
-          echo "下载 iStore 安装脚本..."
-          curl -L --retry 3 --retry-delay 5 --connect-timeout 30 \
-            -o /tmp/istore-reinstall.run \
+          # 下载 istore-reinstall.run (iStore 官方安装脚本, ~1KB)
+          curl -L --retry 3 --retry-delay 5 --connect-timeout 20 \
+            -o /tmp/argon-files/usr/share/systools/istore-reinstall.run \
             "https://github.com/linkease/openwrt-app-actions/raw/main/applications/luci-app-systools/root/usr/share/systools/istore-reinstall.run" 2>/dev/null
-          ISTORE_SCRIPT_SIZE=$(stat -c%s /tmp/istore-reinstall.run 2>/dev/null || echo 0)
-          echo "iStore 脚本大小: ${ISTORE_SCRIPT_SIZE} bytes"
-
-          # 下载 luci-app-store ipk (商店主界面)
-          for URL in \
-            "https://istore.linkease.com/repo/all/luci-app-store/luci-app-store_0.2.3_all.ipk" \
-            "https://github.com/linkease/openwrt-app-actions/raw/main/applications/luci-app-store/root/usr/lib/opkg/info/luci-app-store.control"; do
-            echo "尝试下载: $URL"
-            curl -L --retry 3 --retry-delay 5 --connect-timeout 30 \
-              -o /tmp/luci-app-store.ipk "$URL" 2>/dev/null
-            SIZE=$(stat -c%s /tmp/luci-app-store.ipk 2>/dev/null || echo 0)
-            if [ "$SIZE" -gt 1000 ]; then
-              echo "✅ luci-app-store 下载成功 (${SIZE} bytes)"
-              ISTORE_OK=1
-              break
-            fi
-          done
-
-          # 下载 luci-app-systools ipk (基础依赖)
-          for URL in \
-            "https://istore.linkease.com/repo/all/luci-app-systools/luci-app-systools_0.2.3_all.ipk" \
-            "https://github.com/linkease/openwrt-app-actions/raw/main/applications/luci-app-systools/root/usr/lib/opkg/info/luci-app-systools.control"; do
-            echo "尝试下载: $URL"
-            curl -L --retry 3 --retry-delay 5 --connect-timeout 30 \
-              -o /tmp/luci-app-systools.ipk "$URL" 2>/dev/null
-            SIZE=$(stat -c%s /tmp/luci-app-systools.ipk 2>/dev/null || echo 0)
-            if [ "$SIZE" -gt 1000 ]; then
-              echo "✅ luci-app-systools 下载成功 (${SIZE} bytes)"
-              break
-            fi
-          done
-
-          # 提取 iStore ipk 到 FILES 目录
-          for IPK in /tmp/luci-app-store.ipk /tmp/luci-app-systools.ipk; do
-            if [ -f "$IPK" ]; then
-              SIZE=$(stat -c%s "$IPK" 2>/dev/null || echo 0)
-              if [ "$SIZE" -gt 1000 ]; then
-                echo "提取 $(basename $IPK)..."
-                # 检查是否被 gzip 包装
-                if file "$IPK" | grep -q gzip; then
-                  mv "$IPK" "${IPK}.gz"
-                  gzip -d "${IPK}.gz"
-                fi
-                cd /tmp
-                mkdir -p istore-extract
-                cd istore-extract
-                rm -f debian-binary control.tar.gz control.tar.xz data.tar.gz data.tar.xz
-                ar x "$IPK" 2>/dev/null || tar xf "$IPK" 2>/dev/null
-                if [ -f data.tar.xz ]; then
-                  tar -xJf data.tar.xz -C /tmp/argon-files 2>/dev/null
-                elif [ -f data.tar.gz ]; then
-                  tar -xzf data.tar.gz -C /tmp/argon-files 2>/dev/null
-                fi
-                cd /tmp/argon-files
-                rm -rf /tmp/istore-extract
-              fi
-            fi
-          done
-
-          # 如果 ipk 下载失败，尝试直接从 GitHub 拉取文件
-          if [ "$ISTORE_OK" = "0" ]; then
-            echo "ipk 下载失败，尝试从 GitHub 直接拉取..."
-            # 创建 iStore 目录结构
-            mkdir -p /tmp/argon-files/usr/lib/lua/luci/controller
-            mkdir -p /tmp/argon-files/usr/lib/lua/luci/view
-            mkdir -p /tmp/argon-files/usr/share/luci/menu.d
-            mkdir -p /tmp/argon-files/usr/share/luci/i18n
-
-            # 下载 iStore 核心文件
-            for FPATH in \
-              "applications/luci-app-store/root/usr/lib/lua/luci/controller/store.lua" \
-              "applications/luci-app-store/root/usr/share/luci/menu.d/luci-app-store.json"; do
-              FNAME=$(basename "$FPATH")
-              curl -L --retry 3 --connect-timeout 15 \
-                -o "/tmp/argon-files/usr/lib/lua/luci/controller/$FNAME" \
-                "https://raw.githubusercontent.com/linkease/openwrt-app-actions/main/$FPATH" 2>/dev/null
-            done
-            echo "✅ iStore 核心文件已下载 (GitHub 直接拉取)"
-          fi
-
-          # 验证 iStore 文件
-          echo "=== iStore 文件 ==="
-          find /tmp/argon-files -path '*store*' -type f 2>/dev/null | head -20
-          find /tmp/argon-files -path '*istore*' -type f 2>/dev/null | head -20
+          ISTORE_SIZE=$(stat -c%s /tmp/argon-files/usr/share/systools/istore-reinstall.run 2>/dev/null || echo 0)
+          echo "iStore 脚本: ${ISTORE_SIZE} bytes"
+          chmod +x /tmp/argon-files/usr/share/systools/istore-reinstall.run 2>/dev/null || true
 
           # === UCI defaults: 首次开机自动配置 ===
           echo "=== 创建 UCI defaults 快速配置 ==="
@@ -297,7 +211,14 @@ jobs:
           echo "uci set wizard.default.landing_page='wizard'" >> $UCI
           echo '' >> $UCI
 
-          # 6. 提交
+          # 6. iStore 首次安装
+          echo "# 安装 iStore 应用商店 (首次启动)" >> $UCI
+          echo "if [ -f /usr/share/systools/istore-reinstall.run ]; then" >> $UCI
+          echo "  /usr/share/systools/istore-reinstall.run &" >> $UCI
+          echo "fi" >> $UCI
+          echo '' >> $UCI
+
+          # 7. 提交
           echo "uci commit network" >> $UCI
           echo "uci commit wireless" >> $UCI
           echo "uci commit system" >> $UCI
