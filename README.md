@@ -25,6 +25,7 @@
 ### 网络
 - **wpad-openssl** — 完整 WiFi 功能 (AP/STA/WDS/Mesh/WPA3)
 - **PPPoE** — 宽带拨号
+- **静态地址** — 固定 IP 配置（已内置）
 - **SQM** — QoS 流控 (抗缓冲膨胀)
 - **miniupnpd** — UPnP 端口映射
 
@@ -41,17 +42,19 @@
 - **DDNS** — 动态域名
 - **Wake-on-LAN** — 远程唤醒
 - **HD Idle** — 硬盘休眠
+- **ZeroTier** — 异地组网
+- **iStore 应用商店** — 可扩展更多功能
 
-> **注意**: 由于 16MB Flash 空间限制，v1.0.16 移除了 Samba4、OpenVPN、Adblock、relayd 以确保固件能正常刷入。如需这些功能，可通过 `opkg install` 在线安装。
+> **注意**: 由于 16MB Flash 空间限制，部分大体积软件包（Samba4、OpenVPN、Adblock、Xray-core 等）未包含在固件中。如需这些功能，可通过 `opkg install` 或 iStore 应用商店在线安装。
 
 ## 固件信息
 
 | 项目 | 值 |
 |------|------|
-| 版本 | v1.0.16 |
+| 版本 | v1.0.28 |
 | OpenWrt | 24.10.7 r29197 |
 | 内核 | 6.6.141 |
-| 固件大小 | 10.94 MB |
+| 固件大小 | ~11 MB |
 | 已安装包 | 234 个 |
 
 ## 硬件支持
@@ -141,9 +144,23 @@ Fork 本仓库后，可通过 GitHub Actions 自动构建：
 - 使用 OpenWrt 官方 ImageBuilder 而非全量编译
 - **Argon 主题**: 通过 `FILES` 机制直接注入根文件系统（从 dl.openwrt.ai 下载 .ipk 解压）
 - **Flash 限制**: 固件大小控制在 16MB 以内
-- **软件包策略**: 精选常用包，移除大体积包 (Samba4/OpenVPN/Adblock) 以适配空间
+- **软件包策略**: 精选常用包，移除大体积包以适配空间
+
+## 更新日志
+
+### v1.0.28 (2026-06-30)
+- 修复: 移除不存在的 `luci-proto-static` 包名，修复构建失败
+
+### v1.0.27 (2026-06-30)
+- 移除: Xray-core（27MB 超出 16MB Flash 限制，导致固件为 0 字节）
+- 修复: CI 构建触发条件（添加 `branches: [main]`）
+- 修复: YAML heredoc 语法导致 GitHub Actions 解析失败
+- 修复: Xray-core 文件名和版本号
+
+### v1.0.16
+- 移除: Samba4、OpenVPN、Adblock、relayd（空间不足）
+- 优化: 精简软件包以适配 16MB Flash
 
 ## 许可证
 
 OpenWrt 使用 GPL-2.0 许可证。
-
