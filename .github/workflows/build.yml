@@ -61,84 +61,6 @@ jobs:
           echo "ImageBuilder ready: openwrt-ib"
           ls openwrt-ib/
 
-      - name: Download Xray-core
-        run: |
-          echo "=== Downloading Xray-core for mipsle ==="
-          XRAY_VERSION="v26.3.27"
-          XRAY_URL="https://github.com/XTLS/Xray-core/releases/download/${XRAY_VERSION}/Xray-linux-mips32le.zip"
-          
-          curl -L --retry 5 --retry-delay 10 --connect-timeout 30 \
-            -o /tmp/xray.zip "$XRAY_URL"
-          
-          SIZE=$(stat -c%s /tmp/xray.zip 2>/dev/null || echo 0)
-          FILE_TYPE=$(file /tmp/xray.zip 2>/dev/null)
-          echo "下载完成: ${SIZE} bytes"
-          echo "文件类型: ${FILE_TYPE}"
-          
-          if [ "$SIZE" -lt 1000000 ]; then
-            echo "❌ Xray-core 下载失败 (文件太小)"
-            exit 1
-          fi
-          
-          cd /tmp
-          unzip -o xray.zip -d xray-extract
-          ls -lh /tmp/xray-extract/
-          
-          # 放入 FILES 目录
-          mkdir -p /tmp/argon-files/usr/bin
-          cp /tmp/xray-extract/xray /tmp/argon-files/usr/bin/xray
-          chmod +x /tmp/argon-files/usr/bin/xray
-          
-          # 创建 Xray 配置目录
-          mkdir -p /tmp/argon-files/etc/xray
-          
-          # 创建 procd init 脚本
-          mkdir -p /tmp/argon-files/etc/init.d
-          printf '#!/bin/sh /etc/rc.common\n' > /tmp/argon-files/etc/init.d/xray
-          printf '# Xray-core init script for OpenWrt\n\n' >> /tmp/argon-files/etc/init.d/xray
-          printf 'START=99\n' >> /tmp/argon-files/etc/init.d/xray
-          printf 'STOP=10\n\n' >> /tmp/argon-files/etc/init.d/xray
-          printf 'USE_PROCD=1\n\n' >> /tmp/argon-files/etc/init.d/xray
-          printf 'PROG=/usr/bin/xray\n' >> /tmp/argon-files/etc/init.d/xray
-          printf 'CONF=/etc/xray/config.json\n\n' >> /tmp/argon-files/etc/init.d/xray
-          printf 'start_service() {\n' >> /tmp/argon-files/etc/init.d/xray
-          printf '    [ -f "$CONF" ] || return 0\n' >> /tmp/argon-files/etc/init.d/xray
-          printf '    procd_open_instance\n' >> /tmp/argon-files/etc/init.d/xray
-          printf '    procd_set_param command "$PROG" run -c "$CONF"\n' >> /tmp/argon-files/etc/init.d/xray
-          printf '    procd_set_param respawn 3600 5 5\n' >> /tmp/argon-files/etc/init.d/xray
-          printf '    procd_set_param file "$CONF"\n' >> /tmp/argon-files/etc/init.d/xray
-          printf '    procd_close_instance\n' >> /tmp/argon-files/etc/init.d/xray
-          printf '}\n\n' >> /tmp/argon-files/etc/init.d/xray
-          printf 'service_triggers() {\n' >> /tmp/argon-files/etc/init.d/xray
-          printf '    procd_add_reload_trigger "xray"\n' >> /tmp/argon-files/etc/init.d/xray
-          printf '}\n' >> /tmp/argon-files/etc/init.d/xray
-          chmod +x /tmp/argon-files/etc/init.d/xray
-          
-          # 创建空的默认配置 (用户后续自行配置)
-          printf '{\n' > /tmp/argon-files/etc/xray/config.json
-          printf '  "log": {"level": "warning", "timestamp": true},\n' >> /tmp/argon-files/etc/xray/config.json
-          printf '  "inbounds": [\n' >> /tmp/argon-files/etc/xray/config.json
-          printf '    {"type": "http", "tag": "http-in", "listen": "0.0.0.0", "listen_port": 7890},\n' >> /tmp/argon-files/etc/xray/config.json
-          printf '    {"type": "socks", "tag": "socks-in", "listen": "0.0.0.0", "listen_port": 7891, "sniff": true, "sniff_override_destination": true}\n' >> /tmp/argon-files/etc/xray/config.json
-          printf '  ],\n' >> /tmp/argon-files/etc/xray/config.json
-          printf '  "outbounds": [\n' >> /tmp/argon-files/etc/xray/config.json
-          printf '    {"type": "direct", "tag": "direct"},\n' >> /tmp/argon-files/etc/xray/config.json
-          printf '    {"type": "block", "tag": "block"}\n' >> /tmp/argon-files/etc/xray/config.json
-          printf '  ],\n' >> /tmp/argon-files/etc/xray/config.json
-          printf '  "route": {\n' >> /tmp/argon-files/etc/xray/config.json
-          printf '    "rules": [\n' >> /tmp/argon-files/etc/xray/config.json
-          printf '      {"ip_is_private": true, "outbound": "direct"},\n' >> /tmp/argon-files/etc/xray/config.json
-          printf '      {"domain_suffix": [".cn"], "outbound": "direct"}\n' >> /tmp/argon-files/etc/xray/config.json
-          printf '    ],\n' >> /tmp/argon-files/etc/xray/config.json
-          printf '    "final": "direct"\n' >> /tmp/argon-files/etc/xray/config.json
-          printf '  }\n' >> /tmp/argon-files/etc/xray/config.json
-          printf '}\n' >> /tmp/argon-files/etc/xray/config.json
-          
-          echo "✅ Xray-core ${XRAY_VERSION} 已注入固件"
-          ls -lh /tmp/argon-files/usr/bin/xray
-          rm -f /tmp/xray.zip
-          rm -rf /tmp/xray-extract
-
       - name: Download Argon theme
         run: |
           echo "=== Downloading luci-theme-argon .ipk ==="
@@ -422,7 +344,6 @@ jobs:
 
             ### 安装说明
             - iStore 应用商店已预装, 可直接在 LuCI 菜单中访问
-            - Xray-core 已预装, 配置文件位于 /etc/xray/config.json
             - 通过 iStore 可一键安装各类插件 (VPN、NAS 等)
             - 建议先配置 USB extroot 扩容, 再安装大型插件
 
@@ -431,7 +352,6 @@ jobs:
             |------|------|
             | 应用商店 | iStore (一键安装插件) |
             | Web 管理 | LuCI + Argon 主题 + 中文 |
-            | 代理内核 | Xray-core v26.3.27 (支持VLESS/XHTTP/XTLS/REALITY/VLESS Encryption) |
             | WiFi | wpad-openssl (AP/STA/WDS/Mesh/WPA3) |
             | 拨号 | PPPoE |
             | DNS | SmartDNS |
