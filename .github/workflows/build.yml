@@ -63,82 +63,55 @@ jobs:
         run: |
           echo "=== Downloading luci-theme-argon .ipk ==="
 
-          # 尝试多个来源下载
+          # 尝试多个来源下载 (含文件类型验证)
           DOWNLOAD_OK=0
+          mkdir -p /tmp/argon-files
 
-          # 来源 1: dl.openwrt.ai latest (最可靠, 会重定向到最新可用版本)
-          URL="https://dl.openwrt.ai/latest/packages/mipsel_24kc/kiddin9/luci-theme-argon_2.4.3-r3_all.ipk"
-          echo "Trying: $URL"
-          curl -L --retry 3 --retry-delay 5 --connect-timeout 30 \
-            -o /tmp/luci-theme-argon.ipk "$URL" 2>/dev/null
-          SIZE=$(stat -c%s /tmp/luci-theme-argon.ipk 2>/dev/null || echo 0)
-          if [ "$SIZE" -gt 1000 ]; then
-            echo "✅ Downloaded from dl.openwrt.ai (latest)"
-            DOWNLOAD_OK=1
-          fi
-
-          # 来源 2: dl.openwrt.ai 指定版本
-          if [ "$DOWNLOAD_OK" = "0" ]; then
-            for VER in "25.12" "24.10" "23.05"; do
-              URL="https://dl.openwrt.ai/releases/${VER}/packages/mipsel_24kc/kiddin9/luci-theme-argon_2.4.3-r3_all.ipk"
-              echo "Trying: $URL"
-              curl -L --retry 3 --retry-delay 5 --connect-timeout 30 \
-                -o /tmp/luci-theme-argon.ipk "$URL" 2>/dev/null
-              SIZE=$(stat -c%s /tmp/luci-theme-argon.ipk 2>/dev/null || echo 0)
-              if [ "$SIZE" -gt 1000 ]; then
-                echo "✅ Downloaded from dl.openwrt.ai (${VER})"
-                DOWNLOAD_OK=1
-                break
-              fi
-              echo "   Failed (${SIZE} bytes), trying next..."
-            done
-          fi
-
-          # 来源 3: GitHub Pages
-          if [ "$DOWNLOAD_OK" = "0" ]; then
-            URL="https://jerrykuku.github.io/luci-theme-argon/luci-theme-argon_2.4.3-r3_all.ipk"
+          for URL in \
+            "https://dl.openwrt.ai/latest/packages/mipsel_24kc/kiddin9/luci-theme-argon_2.4.3-r3_all.ipk" \
+            "https://dl.openwrt.ai/releases/25.12/packages/mipsel_24kc/kiddin9/luci-theme-argon_2.4.3-r3_all.ipk" \
+            "https://dl.openwrt.ai/releases/24.10/packages/mipsel_24kc/kiddin9/luci-theme-argon_2.4.3-r3_all.ipk"; do
             echo "Trying: $URL"
-            curl -L --retry 3 --retry-delay 5 --connect-timeout 30 \
+            curl -L --retry 2 --retry-delay 3 --connect-timeout 20 \
               -o /tmp/luci-theme-argon.ipk "$URL" 2>/dev/null
             SIZE=$(stat -c%s /tmp/luci-theme-argon.ipk 2>/dev/null || echo 0)
-            if [ "$SIZE" -gt 1000 ]; then
-              echo "✅ Downloaded from GitHub Pages"
+            FILE_TYPE=$(file /tmp/luci-theme-argon.ipk 2>/dev/null | head -1)
+            if [ "$SIZE" -gt 1000 ] && echo "$FILE_TYPE" | grep -qiE 'gzip|tar|ar|archive'; then
+              echo "✅ Downloaded argon theme (${SIZE} bytes)"
               DOWNLOAD_OK=1
+              break
+            else
+              echo "   Failed (${SIZE} bytes, type: ${FILE_TYPE})"
             fi
-          fi
+          done
 
           if [ "$DOWNLOAD_OK" = "0" ]; then
             echo "⚠ WARNING: Failed to download luci-theme-argon, continuing without theme"
           else
             echo "Downloaded:"
             ls -lh /tmp/luci-theme-argon.ipk
-            file /tmp/luci-theme-argon.ipk || true
 
-            # 提取 .ipk 内容到 FILES 目录
-            mkdir -p /tmp/argon-files
             cd /tmp/argon-files
+            rm -f debian-binary control.tar.gz control.tar.xz data.tar.gz data.tar.xz
 
-            # .ipk 可能被额外 gzip 包装, 先尝试解压
+            # .ipk 可能被额外 gzip 包装
             if file /tmp/luci-theme-argon.ipk | grep -q gzip; then
-              echo "ipk is gzip-compressed, decompressing..."
               mv /tmp/luci-theme-argon.ipk /tmp/luci-theme-argon.ipk.gz
               gzip -d /tmp/luci-theme-argon.ipk.gz
             fi
 
-            # .ipk 是 ar 归档，包含 debian-binary, control.tar.gz, data.tar.gz
-            ar x /tmp/luci-theme-argon.ipk || { echo "ar failed, trying as tar..."; tar xf /tmp/luci-theme-argon.ipk; }
-            ls -la
+            # 提取 ipk
+            ar x /tmp/luci-theme-argon.ipk 2>/dev/null || tar xf /tmp/luci-theme-argon.ipk 2>/dev/null
 
-            # 提取 data.tar (支持 .gz 和 .xz)
+            # 提取 data.tar
             if [ -f data.tar.xz ]; then
-              tar -xJf data.tar.xz
+              tar -xJf data.tar.xz 2>/dev/null
             elif [ -f data.tar.gz ]; then
-              tar -xzf data.tar.gz
+              tar -xzf data.tar.gz 2>/dev/null
             fi
 
             echo "=== Argon theme files ==="
-            find . -type f | head -30
-            echo "..."
+            find . -type f | head -20
             rm -f debian-binary control.tar.gz control.tar.xz data.tar.gz data.tar.xz
           fi
 
