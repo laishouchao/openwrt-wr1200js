@@ -1,6 +1,6 @@
-# OpenWrt Custom Firmware for YouHua WR1200JS
+# OpenWrt 24.10.7 for YouHua WR1200JS
 
-基于 OpenWrt 24.10.7 官方 ImageBuilder 定制的 WR1200JS 专用固件，通过 GitHub Actions 自动构建。
+自定义 OpenWrt 固件，基于官方 ImageBuilder 构建，专为优华 WR1200JS 路由器优化。
 
 ## 设备信息
 
@@ -8,159 +8,90 @@
 |------|------|
 | 型号 | YouHua WR1200JS |
 | SoC | MediaTek MT7621AT (MIPS 1004Kc, 4核 880MHz) |
-| RAM | 128MB DDR3 |
-| Flash | 16MB SPI NOR (GD25Q128) |
-| WiFi 2.4G | MediaTek MT7603E (b/g/n, 20dBm) |
-| WiFi 5G | MediaTek MT76x2E (a/n/ac, 23dBm) |
-| 网口 | 5x 千兆 (4 LAN + 1 WAN) |
-| USB | 1x USB 3.0 |
+| RAM | 128MB |
+| Flash | 16MB SPI NOR |
+| WiFi | MT7603E (2.4G) + MT76x2E (5G) |
 | Target | ramips/mt7621 (mipsel_24kc) |
+
+## 固件特性
+
+- **精简稳定** — 仅保留必要组件，适配 16MB flash 限制
+- **frpc 0.69.1** — 内置最新版远程穿透客户端，支持 TOML 配置
+- **静态地址** — 固定 IP 配置（已内置在 LuCI 中）
+- **LuCI + Argon 主题** — 现代化 Web 管理界面
+- **中文界面** — 完整中文支持
+- **WiFi 双频** — 2.4G + 5G 双频 AP
+- **USB 扩展** — 支持 USB 存储挂载和 extroot 扩容
 
 ## 预装软件
 
-### 系统管理
-- **LuCI** — Web 管理界面 + **Argon 主题** + 中文语言包
-- **nano** / **htop** / **curl** / **wget** — 常用工具
-
-### 网络
-- **wpad-openssl** — 完整 WiFi 功能 (AP/STA/WDS/Mesh/WPA3)
-- **PPPoE** — 宽带拨号
-- **静态地址** — 固定 IP 配置（已内置）
-- **SQM** — QoS 流控 (抗缓冲膨胀)
-- **miniupnpd** — UPnP 端口映射
-
-### DNS
-- **SmartDNS** — 智能 DNS 解析
-
-### VPN
-- **WireGuard** — 高性能 VPN
-
-### USB
-- **USB 挂载** — ext4/vfat/exfat 自动挂载
-
-### 其他
-- **DDNS** — 动态域名
-- **Wake-on-LAN** — 远程唤醒
-- **HD Idle** — 硬盘休眠
-- **ZeroTier** — 异地组网
-- **iStore 应用商店** — 可扩展更多功能
-
-> **注意**: 由于 16MB Flash 空间限制，部分大体积软件包（Samba4、OpenVPN、Adblock、Xray-core 等）未包含在固件中。如需这些功能，可通过 `opkg install` 或 iStore 应用商店在线安装。
-
-## 固件信息
-
-| 项目 | 值 |
+| 分类 | 软件 |
 |------|------|
-| 版本 | v1.0.28 |
-| OpenWrt | 24.10.7 r29197 |
-| 内核 | 6.6.141 |
-| 固件大小 | ~11 MB |
-| 已安装包 | 234 个 |
-
-## 硬件支持
-
-| 硬件 | 状态 |
-|------|------|
-| Power LED | ✅ |
-| 2.4G WiFi LED | ✅ |
-| 5G WiFi LED | ✅ |
-| WPS LED | ✅ |
-| Internet LED | ✅ |
-| LAN 1-4 LED | ✅ (交换机硬件控制) |
-| USB LED | ✅ |
-| Reset 按钮 | ✅ (长按恢复出厂) |
-| WPS 按钮 | ✅ |
-| WiFi 按钮 | ✅ (开关无线) |
-| 5x 千兆网口 | ✅ |
-| 双频 WiFi | ✅ |
-| USB 3.0 | ✅ |
-| 串口 | ✅ (115200/8N1) |
-
-## 下载
-
-前往 [Releases](../../releases) 页面下载最新固件。
-
-| 文件 | 用途 |
-|------|------|
-| `*-sysupgrade.bin` | 系统升级 / Breed 刷入 |
+| 远程穿透 | frpc 0.69.1 (SOCKS5/TCP/UDP) |
+| Web 管理 | LuCI + Argon 主题 + 中文 |
+| WiFi | wpad-openssl (AP/STA/WDS/Mesh/WPA3) |
+| 拨号 | PPPoE |
+| 网络 | 静态地址 / DHCP / DHCPv6 |
+| DNS | SmartDNS |
+| QoS | SQM (抗缓冲膨胀) |
+| DDNS | 动态 DNS |
+| UPnP | miniupnpd |
+| 工具 | nano, htop, curl, wget, wol, hd-idle |
+| USB | 存储挂载 (ext4/vfat/exfat) |
 
 ## 安装方法
 
-### 方法一：Breed Web 恢复控制台（推荐）
+- **首次刷入**: 使用 `*-factory.bin` 通过 Web 或 TFTP 刷入
+- **升级更新**: 使用 `*-sysupgrade.bin` 通过 LuCI 或 `sysupgrade` 命令升级
 
-适用于已刷入 Breed 的路由器。
+## frpc 使用说明
 
-1. 拔掉电源 → 按住 Reset 键不放 → 插上电源 → 等待 10 秒后松开
-2. 电脑用网线连接 LAN 口，设置 IP `192.168.1.100`
-3. 浏览器访问 `http://192.168.1.1`
-4. 选择 **固件更新 → 固件**
-5. 上传 `*-sysupgrade.bin` → 更新
-6. 等待 2-3 分钟，路由器自动重启
-
-### 方法二：SSH 命令行升级
-
-适用于已运行 OpenWrt 的路由器。
+frpc 已内置在固件中，首次使用需要配置：
 
 ```bash
-# 1. 下载固件到路由器
-scp openwrt-*-sysupgrade.bin root@192.168.1.1:/tmp/
+# 1. 编辑配置文件
+vi /etc/frp/frpc.toml
 
-# 2. SSH 登录路由器
-ssh root@192.168.1.1
+# 2. 参考示例配置
+cat /etc/frp/frpc.toml.example
 
-# 3. 执行升级（不保留配置）
-sysupgrade -n /tmp/openwrt-*-sysupgrade.bin
+# 3. 启动 frpc
+/etc/init.d/frpc start
+
+# 4. 设置开机自启
+/etc/init.d/frpc enable
 ```
-
-### 方法三：LuCI Web 界面升级
-
-适用于已运行 OpenWrt 的路由器。
-
-1. 登录 `http://192.168.1.1`
-2. 系统 → 备份/升级
-3. 上传 `*-sysupgrade.bin`
-4. 取消勾选"保留配置"（首次建议全新安装）
-5. 执行升级
-
-### 救砖：TFTP 刷入
-
-如果固件刷入失败，可通过 TFTP 恢复。
-
-1. 网线连接 LAN 口
-2. 电脑设置 IP `192.168.1.100`
-3. 按住 Reset 按钮通电，等待 10 秒松开
-4. 通过 TFTP 上传 factory.bin
-
-## 自定义构建
-
-Fork 本仓库后，可通过 GitHub Actions 自动构建：
-
-1. 修改 `.github/workflows/build.yml` 中的 `PACKAGES` 变量
-2. Push 代码或创建 tag 触发构建
-3. 在 Actions 页面下载构建产物
-
-### 构建技术细节
-
-- 使用 OpenWrt 官方 ImageBuilder 而非全量编译
-- **Argon 主题**: 通过 `FILES` 机制直接注入根文件系统（从 dl.openwrt.ai 下载 .ipk 解压）
-- **Flash 限制**: 固件大小控制在 16MB 以内
-- **软件包策略**: 精选常用包，移除大体积包以适配空间
 
 ## 更新日志
 
-### v1.0.28 (2026-06-30)
-- 修复: 移除不存在的 `luci-proto-static` 包名，修复构建失败
+### v1.0.29
+- 移除 iStore 应用商店和 xray-core（精简固件体积）
+- 内置 frpc 0.69.1（最新版，支持 TOML 配置格式）
+- 内置 frpc 启动脚本和示例配置
+- 保留所有基础功能：WiFi、PPPoE、SmartDNS、SQM、DDNS、UPnP 等
 
-### v1.0.27 (2026-06-30)
-- 移除: Xray-core（27MB 超出 16MB Flash 限制，导致固件为 0 字节）
-- 修复: CI 构建触发条件（添加 `branches: [main]`）
-- 修复: YAML heredoc 语法导致 GitHub Actions 解析失败
-- 修复: Xray-core 文件名和版本号
+### v1.0.28
+- 修复构建配置：移除不存在的 luci-proto-static 包
+- 更新 README 文档
+
+### v1.0.27
+- 首个基于 OpenWrt 24.10.7 的正式版本
+- 内置 Xray-core v26.6.22
+- 预装 iStore 应用商店
+- 预装 ZeroTier 网络穿透
 
 ### v1.0.16
-- 移除: Samba4、OpenVPN、Adblock、relayd（空间不足）
-- 优化: 精简软件包以适配 16MB Flash
+- 早期版本
 
-## 许可证
+## 硬件支持
 
-OpenWrt 使用 GPL-2.0 许可证。
+- ✅ 所有 10 个 LED 灯 (Power/2.4G/5G/WPS/Internet/LAN1-4/USB)
+- ✅ 所有 3 个按钮 (Reset/WPS/WiFi)
+- ✅ 5 个千兆网口 (4 LAN + 1 WAN)
+- ✅ 双频 WiFi (2.4G b/g/n + 5G a/n/ac)
+- ✅ USB 3.0 端口
+- ✅ 串口 (115200/8N1)
+
+## 下载
+
+[Releases](https://github.com/laishouchao/openwrt-wr1200js/releases)
