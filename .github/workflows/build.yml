@@ -149,21 +149,95 @@ jobs:
             echo "⚠ luci-app-wizard 下载失败, 跳过"
           fi
 
-          # === 下载 iStore 安装脚本 ===
-          echo "=== 下载 iStore 安装脚本 ==="
-          mkdir -p /tmp/argon-files/usr/share/systools
+      - name: Download frpc 0.69.1
+        run: |
+          echo "=== 下载 frpc 0.69.1 mipsle ==="
+          mkdir -p /tmp/argon-files/usr/bin
+          mkdir -p /tmp/argon-files/etc/frp
+          mkdir -p /tmp/argon-files/etc/init.d
 
-          # 下载 istore-reinstall.run (iStore 官方安装脚本, ~1KB)
-          curl -L --retry 3 --retry-delay 5 --connect-timeout 20 \
-            -o /tmp/argon-files/usr/share/systools/istore-reinstall.run \
-            "https://github.com/linkease/openwrt-app-actions/raw/main/applications/luci-app-systools/root/usr/share/systools/istore-reinstall.run" 2>/dev/null
-          ISTORE_SIZE=$(stat -c%s /tmp/argon-files/usr/share/systools/istore-reinstall.run 2>/dev/null || echo 0)
-          echo "iStore 脚本: ${ISTORE_SIZE} bytes"
-          chmod +x /tmp/argon-files/usr/share/systools/istore-reinstall.run 2>/dev/null || true
+          # 下载 frpc mipsle
+          FRPC_URL="https://github.com/fatedier/frp/releases/download/v0.69.1/frp_0.69.1_linux_mipsle.tar.gz"
+          curl -L --retry 3 --retry-delay 5 --connect-timeout 30 \
+            -o /tmp/frpc.tar.gz "$FRPC_URL"
 
-          # === UCI defaults: 首次开机自动配置 ===
+          FRPC_SIZE=$(stat -c%s /tmp/frpc.tar.gz 2>/dev/null || echo 0)
+          if [ "$FRPC_SIZE" -gt 1000000 ]; then
+            echo "✅ frpc 下载成功 (${FRPC_SIZE} bytes)"
+            cd /tmp
+            tar xzf frpc.tar.gz frp_0.69.1_linux_mipsle/frpc
+            cp frp_0.69.1_linux_mipsle/frpc /tmp/argon-files/usr/bin/frpc
+            chmod +x /tmp/argon-files/usr/bin/frpc
+            echo "✅ frpc 二进制已安装"
+            rm -rf /tmp/frpc.tar.gz /tmp/frp_0.69.1_linux_mipsle
+          else
+            echo "❌ frpc 下载失败!"
+            exit 1
+          fi
+
+          # 创建 frpc init.d 启动脚本
+          cat > /tmp/argon-files/etc/init.d/frpc << 'INITEOF'
+          #!/bin/sh /etc/rc.common
+
+          START=99
+          STOP=10
+
+          USE_PROCD=1
+
+          start_service() {
+              if [ ! -f /etc/frp/frpc.toml ]; then
+                  echo "frpc: 配置文件 /etc/frp/frpc.toml 不存在, 请先创建配置"
+                  return 1
+              fi
+              procd_open_instance
+              procd_set_param command /usr/bin/frpc -c /etc/frp/frpc.toml
+              procd_set_param respawn
+              procd_set_param stdout 1
+              procd_set_param stderr 1
+              procd_close_instance
+          }
+
+          stop_service() {
+              killall frpc 2>/dev/null
+          }
+          INITEOF
+          # 移除行首空格
+          sed -i 's/^          //' /tmp/argon-files/etc/init.d/frpc
+          chmod +x /tmp/argon-files/etc/init.d/frpc
+          echo "✅ frpc 启动脚本已创建"
+
+          # 创建示例配置文件
+          cat > /tmp/argon-files/etc/frp/frpc.toml.example << 'CFGEOF'
+          # frpc 配置示例 - 请复制为 frpc.toml 并修改
+          # cp /etc/frp/frpc.toml.example /etc/frp/frpc.toml
+
+          serverAddr = "your-server.com"
+          serverPort = 7000
+
+          [auth]
+          token = "your-token"
+
+          [transport.tls]
+          enable = true
+          serverName = "your-server.com"
+
+          # SOCKS5 代理示例
+          [[proxies]]
+          name = "socks5"
+          type = "tcp"
+          remotePort = 6005
+
+          [proxies.plugin]
+          type = "socks5"
+          username = "admin"
+          password = "your-password"
+          CFGEOF
+          sed -i 's/^          //' /tmp/argon-files/etc/frp/frpc.toml.example
+          echo "✅ frpc 示例配置已创建"
+
+      - name: Create UCI defaults
+        run: |
           echo "=== 创建 UCI defaults 快速配置 ==="
-          cd /tmp/argon-files
           mkdir -p /tmp/argon-files/etc/uci-defaults
           UCI=/tmp/argon-files/etc/uci-defaults/90-wr1200js-setup
 
@@ -213,14 +287,7 @@ jobs:
           echo "uci set wizard.default.landing_page='wizard'" >> $UCI
           echo '' >> $UCI
 
-          # 6. iStore 首次安装
-          echo "# 安装 iStore 应用商店 (首次启动)" >> $UCI
-          echo "if [ -f /usr/share/systools/istore-reinstall.run ]; then" >> $UCI
-          echo "  /usr/share/systools/istore-reinstall.run &" >> $UCI
-          echo "fi" >> $UCI
-          echo '' >> $UCI
-
-          # 7. 提交
+          # 6. 提交
           echo "uci commit network" >> $UCI
           echo "uci commit wireless" >> $UCI
           echo "uci commit system" >> $UCI
@@ -230,9 +297,8 @@ jobs:
 
           chmod +x $UCI
           echo "✅ 快速配置脚本已创建"
-          cat $UCI
 
-          # === 添加 kiddin9 软件源 (iStore 依赖 + 后续插件安装) ===
+          # === 添加 kiddin9 软件源 (后续插件安装) ===
           echo "=== 添加 kiddin9 软件源 ==="
           mkdir -p /tmp/argon-files/etc/opkg
           cat > /tmp/argon-files/etc/opkg/customfeeds.conf << 'FEED_EOF'
@@ -242,19 +308,17 @@ jobs:
           # 移除行首空格 (heredoc 缩进导致的问题)
           sed -i 's/^          //' /tmp/argon-files/etc/opkg/customfeeds.conf
           echo "✅ kiddin9 软件源已添加"
-          cat /tmp/argon-files/etc/opkg/customfeeds.conf
 
           echo "FILES directory ready:"
-          find . -type d | sort
+          find /tmp/argon-files -type d | sort
 
       - name: Build firmware
         run: |
           cd openwrt-ib
 
           # 软件包列表 - 精简以适配 16MB flash
-          # 已移除: samba4 (大体积), adblock (可后期安装), wireguard, mihomo/fchomo
-          # 保留: LuCI, WiFi, PPPoE, USB, SmartDNS, SQM, DDNS, UPnP, 工具
-          # iStore 应用商店通过 FILES 注入, 后续可通过 iStore 安装各类插件
+          # 已移除: iStore, xray-core, samba4, adblock, wireguard
+          # 内置: frpc 0.69.1 (通过 FILES 注入)
           PACKAGES="\
             luci luci-i18n-base-zh-cn luci-compat luci-lib-ipkg \
             -wpad-basic-mbedtls wpad-openssl \
@@ -276,8 +340,9 @@ jobs:
           echo "Packages: ${PACKAGES}"
           echo "FILES dir: /tmp/argon-files"
           ls -la /tmp/argon-files/
+          ls -la /tmp/argon-files/usr/bin/
 
-          # 使用 FILES 机制将 Argon 主题文件注入根文件系统
+          # 使用 FILES 机制将 Argon 主题 + frpc 注入根文件系统
           make image PROFILE="${PROFILE}" \
             PACKAGES="${PACKAGES}" \
             FILES="/tmp/argon-files" \
@@ -334,26 +399,54 @@ jobs:
             - **WiFi**: MT7603E (2.4G) + MT76x2E (5G)
             - **Target**: ramips/mt7621 (mipsel_24kc)
 
+            ### 更新日志
+
+            #### v1.0.29
+            - 移除 iStore 应用商店和 xray-core（精简固件体积）
+            - 内置 frpc 0.69.1（最新版，支持 TOML 配置格式）
+            - 内置 frpc 启动脚本和示例配置
+            - 保留所有基础功能：WiFi、PPPoE、SmartDNS、SQM、DDNS、UPnP 等
+
+            #### v1.0.28
+            - 修复构建配置：移除不存在的 luci-proto-static 包
+            - 更新 README 文档
+
+            #### v1.0.27
+            - 首个基于 OpenWrt 24.10.7 的正式版本
+
             ### 固件说明
-            基于 OpenWrt 官方 ImageBuilder 定制，预装常用软件包。
-            内置 Xray-core 代理内核，支持 VLESS/XHTTP/XTLS/REALITY/VLESS Encryption 等最新协议。
+            基于 OpenWrt 官方 ImageBuilder 定制，精简稳定。
+            内置 frpc 0.69.1 远程穿透客户端，支持 SOCKS5/TCP/UDP 代理转发。
 
             ### 安装方法
             - **首次刷入**: 使用 `*-factory.bin` 通过 Web 或 TFTP 刷入
             - **升级更新**: 使用 `*-sysupgrade.bin` 通过 LuCI 或 `sysupgrade` 命令升级
 
-            ### 安装说明
-            - iStore 应用商店已预装, 可直接在 LuCI 菜单中访问
-            - 通过 iStore 可一键安装各类插件 (VPN、NAS 等)
-            - 建议先配置 USB extroot 扩容, 再安装大型插件
+            ### frpc 使用说明
+            frpc 已内置在固件中，首次使用需要配置：
+
+            ```bash
+            # 1. 编辑配置文件
+            vi /etc/frp/frpc.toml
+
+            # 2. 参考示例配置
+            cat /etc/frp/frpc.toml.example
+
+            # 3. 启动 frpc
+            /etc/init.d/frpc start
+
+            # 4. 设置开机自启
+            /etc/init.d/frpc enable
+            ```
 
             ### 预装软件
             | 分类 | 软件 |
             |------|------|
-            | 应用商店 | iStore (一键安装插件) |
+            | 远程穿透 | frpc 0.69.1 (支持 SOCKS5/TCP/UDP) |
             | Web 管理 | LuCI + Argon 主题 + 中文 |
             | WiFi | wpad-openssl (AP/STA/WDS/Mesh/WPA3) |
             | 拨号 | PPPoE |
+            | 网络 | 静态地址 / DHCP / DHCPv6 |
             | DNS | SmartDNS |
             | QoS | SQM (抗缓冲膨胀) |
             | DDNS | 动态 DNS |
