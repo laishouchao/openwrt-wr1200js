@@ -17,6 +17,7 @@
 
 - **精简稳定** — 仅保留必要组件，适配 16MB flash 限制
 - **frpc 0.69.1** — 内置最新版远程穿透客户端，支持 TOML 配置
+- **luci-app-frpc-new** — 适配 TOML 格式的 LuCI Web 管理界面
 - **静态地址** — 固定 IP 配置（已内置在 LuCI 中）
 - **LuCI + Argon 主题** — 现代化 Web 管理界面
 - **中文界面** — 完整中文支持
@@ -27,7 +28,7 @@
 
 | 分类 | 软件 |
 |------|------|
-| 远程穿透 | frpc 0.69.1 (SOCKS5/TCP/UDP) |
+| 远程穿透 | frpc 0.69.1 + LuCI 管理界面 (SOCKS5/TCP/UDP) |
 | Web 管理 | LuCI + Argon 主题 + 中文 |
 | WiFi | wpad-openssl (AP/STA/WDS/Mesh/WPA3) |
 | 拨号 | PPPoE |
@@ -46,23 +47,38 @@
 
 ## frpc 使用说明
 
-frpc 已内置在固件中，首次使用需要配置：
+frpc 已内置在固件中，支持两种配置方式：
 
+### 方式一：LuCI Web 界面（推荐）
+1. 登录 LuCI 管理界面 (http://192.168.2.1)
+2. 进入 **服务 → frpc** 菜单
+3. 填写服务器地址、端口、认证令牌
+4. 添加代理规则（SOCKS5/TCP/UDP 等）
+5. 保存后自动生效
+
+### 方式二：命令行
 ```bash
-# 1. 编辑配置文件
-vi /etc/frp/frpc.toml
+# 编辑 UCI 配置
+uci set frpc.main.server_addr='your-server.com'
+uci set frpc.main.token='your-token'
+uci commit frpc
 
-# 2. 参考示例配置
-cat /etc/frp/frpc.toml.example
-
-# 3. 启动 frpc
+# 启动 frpc
 /etc/init.d/frpc start
 
-# 4. 设置开机自启
+# 设置开机自启
 /etc/init.d/frpc enable
 ```
 
 ## 更新日志
+
+### v1.0.30
+- 新增 luci-app-frpc-new：适配 frpc 0.69.1 TOML 格式的 LuCI Web 管理界面
+- 支持通过 Web 界面配置服务器连接、添加/编辑/删除代理规则
+- 实时显示 frpc 运行状态、版本号、PID
+- 自动将 UCI 配置转换为 TOML 格式（无需手动编辑 TOML 文件）
+- 支持 TCP/UDP/HTTP/HTTPS/STCP/XTCP 代理类型
+- 完整中文翻译
 
 ### v1.0.29
 - 移除 iStore 应用商店和 xray-core（精简固件体积）
