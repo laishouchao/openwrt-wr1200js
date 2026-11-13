@@ -1,6 +1,6 @@
 # OpenWrt 24.10.7 for YouHua WR1200JS
 
-自定义 OpenWrt 固件，基于官方 ImageBuilder 构建，专为优华 WR1200JS 路由器优化。
+自定义 OpenWrt 固件，基于官方 ImageBuilder 构建，专为友华 WR1200JS 路由器优化。
 
 ## 设备信息
 
